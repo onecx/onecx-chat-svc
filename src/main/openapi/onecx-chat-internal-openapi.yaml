@@ -1,0 +1,633 @@
+---
+openapi: 3.0.3
+info:
+  title: onecx-chat internal service
+  version: 1.0.0
+servers:
+  - url: "http://onecx-chat-svc:8080"
+tags:
+  - name: chatsInternal
+  - name: messagesInternal  
+paths:
+  /internal/chats/{chatId}/messages:
+    get:
+      security:
+        - oauth2: [ ocx-chat:all, ocx-chat:read ]
+      tags:
+        - chatsInternal
+      description: Return list of messages
+      operationId: getChatMessages
+      parameters:
+        - name: chatId
+          in: path
+          required: true
+          description: The ID of the chat          
+          schema:
+            type: string      
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Message'
+    post:
+      security:
+        - oauth2: [ ocx-chat:all, ocx-chat:write ]
+      tags:
+        - chatsInternal
+      description: creates a Message
+      operationId: createChatMessage
+      parameters:
+        - name: chatId
+          in: path
+          required: true
+          schema:
+            type: string      
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMessage'
+      responses:
+        "201":
+          description: New message created
+          headers:
+            Location:
+              required: true
+              schema:
+                type: string
+                format: url
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetailResponse'
+  /internal/chats/{chatId}/participants:
+    get:
+      security:
+        - oauth2: [ ocx-chat:all, ocx-chat:read ]
+      tags:
+        - chatsInternal
+      description: Return list of participants
+      operationId: getChatParticipants
+      parameters:
+        - name: chatId
+          in: path
+          required: true
+          description: The ID of the chat          
+          schema:
+            type: string      
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Participant'
+    post:
+      security:
+        - oauth2: [ ocx-chat:all, ocx-chat:write ]
+      tags:
+        - chatsInternal
+      description: add a participant
+      operationId: addParticipant
+      parameters:
+        - name: chatId
+          in: path
+          required: true
+          schema:
+            type: string      
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddParticipant'
+      responses:
+        "201":
+          description: New Participant added
+          headers:
+            Location:
+              required: true
+              schema:
+                type: string
+                format: url
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Participant'
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetailResponse'                
+  /internal/chats:
+    get:
+      security:
+        - oauth2: [ ocx-chat:all, ocx-chat:read ]
+      tags:
+        - chatsInternal
+      description: Return list of chats
+      operationId: getChats
+      parameters:
+        - name: pageNumber
+          in: query
+          schema:
+            format: int32
+            description: The number of page.
+            default: 0
+            type: integer
+        - name: pageSize
+          in: query
+          schema:
+            format: int32
+            description: The size of page
+            default: 10
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ChatPageResult'
+    post:
+      security:
+        - oauth2: [ ocx-chat:all, ocx-chat:write ]
+      tags:
+        - chatsInternal
+      description: Create chat
+      operationId: createChat
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateChat'
+      responses:
+        "201":
+          description: New chat created
+          headers:
+            Location:
+              required: true
+              schema:
+                type: string
+                format: url
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Chat'
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetailResponse'
+  /internal/chats/{id}:
+    get:
+      security:
+        - oauth2: [ ocx-chat:all, ocx-chat:read ]
+      tags:
+        - chatsInternal
+      description: Return chat by ID
+      operationId: getChatById
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Chat'
+        "404":
+          description: Not found
+    put:
+      security:
+        - oauth2: [ ocx-chat:all, ocx-chat:write ]
+      tags:
+        - chatsInternal
+      description: Update chat by ID
+      operationId: updateChat
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateChat'
+      responses:
+        "204":
+          description: Chat updated
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetailResponse'
+        "404":
+          description: Chat not found
+    delete:
+      security:
+        - oauth2: [ ocx-chat:all, ocx-chat:delete ]
+      tags:
+        - chatsInternal
+      description: Delete chat by ID
+      operationId: deleteChat
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No Content
+  /internal/chats/search:
+    post:
+      security:
+        - oauth2: [ ocx-chat:all, ocx-chat:write ]
+      tags:
+        - chatsInternal
+      description: Search for chats
+      operationId: searchChats
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatSearchCriteria'
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ChatPageResult'
+components:
+  securitySchemes:
+    oauth2:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: https://oauth.simple.api/token
+          scopes:
+            ocx-chat:all: Grants access to all operations
+            ocx-chat:read: Grants read access
+            ocx-chat:write: Grants write access
+            ocx-chat:delete: Grants access to delete operations
+
+  schemas:
+    ChatType:
+      type: string
+      enum:
+        - HUMAN_DIRECT_CHAT
+        - HUMAN_GROUP_CHAT
+        - AI_CHAT
+    MessageType:
+      type: string
+      enum:
+        - HUMAN
+        - ASSISTANT
+        - SYSTEM
+    ParticipantType:
+      type: string
+      enum:
+        - HUMAN
+        - ASSISTANT
+    ChatSearchCriteria:
+      type: object
+      properties:
+        type:
+          $ref: '#/components/schemas/ChatType'
+        topic:
+          type: string
+        participant:
+          type: string
+        appId:
+          type: string
+        userId:
+          type: string
+        pageNumber:
+          format: int32
+          description: The number of page.
+          default: 0
+          type: integer
+        pageSize:
+          format: int32
+          description: The size of page
+          default: 10
+          type: integer
+    ChatPageResult:
+      type: object
+      properties:
+        totalElements:
+          format: int64
+          description: The total elements in the resource.
+          type: integer
+        number:
+          format: int32
+          type: integer
+        size:
+          format: int32
+          type: integer
+        totalPages:
+          format: int64
+          type: integer
+        stream:
+          type: array
+          items:
+            $ref: '#/components/schemas/Chat'
+    MessagePageResult:
+      type: object
+      properties:
+        totalElements:
+          format: int64
+          description: The total elements in the resource.
+          type: integer
+        number:
+          format: int32
+          type: integer
+        size:
+          format: int32
+          type: integer
+        totalPages:
+          format: int64
+          type: integer
+        stream:
+          type: array
+          items:
+            $ref: '#/components/schemas/Message'
+    Chat:
+      required:
+        - type
+      type: object
+      properties:
+        version:
+          format: int32
+          type: integer
+        creationDate:
+          $ref: '#/components/schemas/OffsetDateTime'
+        creationUser:
+          type: string
+        modificationDate:
+          $ref: '#/components/schemas/OffsetDateTime'
+        modificationUser:
+          type: string
+        id:
+          type: string
+        type:
+          $ref: '#/components/schemas/ChatType'
+        topic:
+          type: string
+        summary:
+          type: string
+        appId:
+          type: string
+        userId:
+          type: string
+        participants:
+          type: array
+          items:
+            $ref: '#/components/schemas/Participant'
+    Message:
+      required:
+        - type
+      type: object
+      properties:
+        version:
+          format: int32
+          type: integer
+        creationDate:
+          $ref: '#/components/schemas/OffsetDateTime'
+        creationUser:
+          type: string
+        modificationDate:
+          $ref: '#/components/schemas/OffsetDateTime'
+        modificationUser:
+          type: string
+        id:
+          type: string
+        type:
+          $ref: '#/components/schemas/MessageType'
+        text:
+          type: string
+        userId:
+          type: string
+    Participant:
+      required:
+        - type
+        - userId
+      type: object
+      properties:
+        version:
+          format: int32
+          type: integer
+        creationDate:
+          $ref: '#/components/schemas/OffsetDateTime'
+        creationUser:
+          type: string
+        modificationDate:
+          $ref: '#/components/schemas/OffsetDateTime'
+        modificationUser:
+          type: string
+        id:
+          type: string
+        type:
+          $ref: '#/components/schemas/ParticipantType'
+        userId:
+          type: string
+        userName:
+          type: string
+        email:
+          type: string
+    OffsetDateTime:
+      format: date-time
+      type: string
+      example: 2022-03-10T12:15:50-04:00
+    ProblemDetailResponse:
+      type: object
+      properties:
+        errorCode:
+          type: string
+        detail:
+          type: string
+        params:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProblemDetailParam'
+        invalidParams:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProblemDetailInvalidParam'
+    ProblemDetailParam:
+      type: object
+      properties:
+        key:
+          type: string
+        value:
+          type: string
+    ProblemDetailInvalidParam:
+      type: object
+      properties:
+        name:
+          type: string
+        message:
+          type: string
+    CreateMessage:
+      required:
+        - type
+      type: object
+      properties:
+        version:
+          format: int32
+          type: integer
+        creationDate:
+          $ref: '#/components/schemas/OffsetDateTime'
+        creationUser:
+          type: string
+        modificationDate:
+          $ref: '#/components/schemas/OffsetDateTime'
+        modificationUser:
+          type: string
+        id:
+          type: string
+        text:
+          type: string
+        type:
+          $ref: '#/components/schemas/MessageType'
+        userId:
+          type: string
+        requestContext:
+          $ref: '#/components/schemas/RequestContext'
+    RequestContext:
+      type: object
+      properties:
+        filter:
+          $ref: '#/components/schemas/ConfigurationFilter'
+        aiContext:
+          type: object
+          additionalProperties:
+            type: string
+    ConfigurationFilter:
+      type: object
+      properties:
+        key:
+          type: string
+          enum:
+            - APP_ID
+        value:
+          type: string
+    AddParticipant:
+      required:
+        - type
+        - userId
+      type: object
+      properties:
+        version:
+          format: int32
+          type: integer
+        creationDate:
+          $ref: '#/components/schemas/OffsetDateTime'
+        creationUser:
+          type: string
+        modificationDate:
+          $ref: '#/components/schemas/OffsetDateTime'
+        modificationUser:
+          type: string
+        id:
+          type: string
+        type:
+          $ref: '#/components/schemas/ParticipantType'
+        userId:
+          type: string
+        userName:
+          type: string
+        email:
+          type: string
+    CreateChat:
+      required:
+        - type
+        - participants
+      type: object
+      properties:
+        version:
+          format: int32
+          type: integer
+        creationDate:
+          $ref: '#/components/schemas/OffsetDateTime'
+        creationUser:
+          type: string
+        modificationDate:
+          $ref: '#/components/schemas/OffsetDateTime'
+        modificationUser:
+          type: string
+        id:
+          type: string
+        type:
+          $ref: '#/components/schemas/ChatType'
+        topic:
+          type: string
+        summary:
+          type: string
+        appId:
+          type: string
+        participants:
+          type: array
+          items:
+            $ref: '#/components/schemas/Participant'
+    UpdateChat:
+      required:
+        - name
+      type: object
+      properties:
+        version:
+          format: int32
+          type: integer
+        creationDate:
+          $ref: '#/components/schemas/OffsetDateTime'
+        creationUser:
+          type: string
+        modificationDate:
+          $ref: '#/components/schemas/OffsetDateTime'
+        modificationUser:
+          type: string
+        id:
+          type: string
+        type:
+          $ref: '#/components/schemas/ChatType'
+        topic:
+          type: string
+        summary:
+          type: string
+        appId:
+          type: string
+        participants:
+          type: array
+          items:
+            $ref: '#/components/schemas/Participant'           

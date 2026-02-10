@@ -1,0 +1,5 @@
+
+:docker-registry: https://github.com/onecx/onecx-chat-svc/pkgs/container/onecx-chat-svc
+:helm-registry: https://github.com/onecx/onecx-chat-svc/pkgs/container/charts%2Fonecx-chat-svc
+:properties-file: src/main/resources/application.properties
+:helm-file: src/main/helm/values.yaml

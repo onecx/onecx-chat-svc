@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<dataset>
+
+	<!-- CHAT -->
+	<CHAT guid="chat-11-111" optlock="0" type="HUMAN_DIRECT_CHAT" app_id="appId" tenant_id="default" creationuser="user1" user_id="user1"/>
+	<CHAT guid="chat-22-222" optlock="0" type="AI_CHAT" app_id="appId"  tenant_id="default" creationuser="user1" user_id="user1"/>
+	<CHAT guid="chat-33-333" optlock="0" type="AI_CHAT" app_id="appId"  tenant_id="default" creationuser="user1" topic="topic chat-33-333" user_id="user1"/>
+	<CHAT guid="chat-DELETE_1" optlock="0" type="AI_CHAT" app_id="appId" tenant_id="default" creationuser="user2" user_id="user2"/>
+
+	<!-- PARTICIPANT -->
+	<PARTICIPANT guid="participant-11-111" optlock="0" type="ASSISTANT" user_id="chat" user_name="Bot" tenant_id="default"/>
+	<PARTICIPANT guid="participant-22-222" optlock="0" type="HUMAN" user_id="user1" user_name="Human"  tenant_id="default"/>
+
+	<!-- MESSAGE -->
+	<MESSAGE guid="msg-11-111" optlock="0" type="ASSISTANT" text="How can I help you?" user_id="Bot" tenant_id="default" chat_id="chat-22-222"/>
+	<MESSAGE guid="msg-22-222" optlock="0" type="HUMAN" text="Why is the sky blue?" user_id="Human"  tenant_id="default" chat_id="chat-22-222"/>
+	<MESSAGE guid="msg-33-333" optlock="0" type="ASSISTANT" text="Rayleigh scattering. When sunlight enters Earth's atmosphere, it is composed of different colors of light, each with different wavelengths. The shorter wavelengths, such as blue and violet, are scattered more easily by the gases and particles in the atmosphere compared to the longer wavelengths, like red and yellow.\n\As sunlight passes through the atmosphere, the shorter blue wavelengths are scattered in all directions by the gases and particles. This scattering is more effective for shorter wavelengths because they interact more with the small particles and gas molecules in the atmosphere. As a result, when we look up at the sky during the day, we see the scattered blue light coming from all directions, giving the sky its characteristic blue color.\n\nThe sky appears blue to us because our eyes are more sensitive to blue light, and our brains interpret the scattered blue light as the predominant color of the sky. At sunrise or sunset, when the sun is lower in the sky, the sunlight must pass through a greater thickness of the Earth's atmosphere, causing more scattering of the shorter wavelengths. This scattering results in the colors of the sunrise or sunset appearing more red and orange.\n" user_id="Bot" tenant_id="default" chat_id="chat-22-222"/>
+	<MESSAGE guid="msg-DELETE_1" optlock="0" type="SYSTEM" text="" user_id="Bot" tenant_id="default" chat_id="chat-DELETE_1"/>
+
+
+
+	<!-- TENANT -->
+	<!-- CHAT -->
+	<CHAT guid="t-chat-11-111" optlock="0" type="HUMAN_DIRECT_CHAT" app_id="appId" tenant_id="tenant-100" creationuser="user1" user_id="user1"/>
+	<CHAT guid="t-chat-22-222" optlock="0" type="AI_CHAT" app_id="appId" tenant_id="tenant-100" creationuser="user1" user_id="user1"/>
+	<CHAT guid="t-chat-DELETE_1" optlock="0" type="AI_CHAT" app_id="appId" tenant_id="tenant-200" creationuser="user2" user_id="user2"/>
+
+	<!-- PARTICIPANT -->
+	<PARTICIPANT guid="t-participant-11-111" optlock="0" type="ASSISTANT" user_id="chat" user_name="Bot" tenant_id="default"/>
+	<PARTICIPANT guid="t-participant-22-222" optlock="0" type="HUMAN" user_id="user1" user_name="Human"  tenant_id="default"/>
+
+
+	<!-- MESSAGE -->
+	<MESSAGE guid="t-msg-11-111" optlock="0" type="ASSISTANT" text="How can I help you?" user_id="Bot" tenant_id="tenant-100" chat_id="t-chat-22-222"/>
+	<MESSAGE guid="t-msg-22-222" optlock="0" type="HUMAN" text="Why is the sky blue?" user_id="Human" tenant_id="tenant-100" chat_id="t-chat-22-222"/>
+	<MESSAGE guid="t-msg-33-333" optlock="0" type="ASSISTANT" text="Rayleigh scattering. When sunlight enters Earth's atmosphere, it is composed of different colors of light, each with different wavelengths. The shorter wavelengths, such as blue and violet, are scattered more easily by the gases and particles in the atmosphere compared to the longer wavelengths, like red and yellow.\n\As sunlight passes through the atmosphere, the shorter blue wavelengths are scattered in all directions by the gases and particles. This scattering is more effective for shorter wavelengths because they interact more with the small particles and gas molecules in the atmosphere. As a result, when we look up at the sky during the day, we see the scattered blue light coming from all directions, giving the sky its characteristic blue color.\n\nThe sky appears blue to us because our eyes are more sensitive to blue light, and our brains interpret the scattered blue light as the predominant color of the sky. At sunrise or sunset, when the sun is lower in the sky, the sunlight must pass through a greater thickness of the Earth's atmosphere, causing more scattering of the shorter wavelengths. This scattering results in the colors of the sunrise or sunset appearing more red and orange.\n" user_id="Bot" tenant_id="tenant-100" chat_id="t-chat-22-222"/>
+	<MESSAGE guid="t-msg-DELETE_1" optlock="0" type="SYSTEM" text="" user_id="Bot" tenant_id="tenant-200" chat_id="t-chat-DELETE_1"/>
+
+
+    <CHAT_PARTICIPANT chat_guid="chat-11-111" participant_guid="participant-11-111"/>
+    <CHAT_PARTICIPANT chat_guid="chat-22-222" participant_guid="participant-22-222"/>
+
+    <CHAT_PARTICIPANT chat_guid="t-chat-11-111" participant_guid="t-participant-11-111"/>
+    <CHAT_PARTICIPANT chat_guid="t-chat-22-222" participant_guid="t-participant-22-222"/>
+
+</dataset>

@@ -1,0 +1,7 @@
+include::onecx-chat-svc-attributes.adoc[opts=optional]
+
+= OneCX Chat Backend Service
+
+
+
+include::onecx-chat-svc-docs.adoc[opts=optional]

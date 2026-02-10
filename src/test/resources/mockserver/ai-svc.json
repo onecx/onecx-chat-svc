@@ -1,0 +1,42 @@
+[
+  {
+    "id": "1",
+    "httpRequest": {
+      "method": "GET",
+      "path": "/ai/conversation/123456"
+    },
+    "httpResponse": {
+      "statusCode": 200,
+      "body": {
+        "conversationId": "123456",
+        "history": [
+          {
+            "conversationId": "123456",
+            "message": "Mock response for conversation",
+            "type": "USER",
+            "creationDate": 1643684377000
+          }
+        ],
+        "conversationType": "CHANNELING"
+      }
+    }
+  },
+  {
+    "id": "2",
+    "httpRequest": {
+      "method": "POST",
+      "path": "/ai/startConversation"
+    },
+    "httpResponse": {
+      "statusCode": 200,
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "body": {
+        "conversationId": "123456",
+        "history": [],
+        "conversationType": "CHANNELING"
+      }
+    }
+  }
+]
