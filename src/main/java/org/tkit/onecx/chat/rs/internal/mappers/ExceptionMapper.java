@@ -16,9 +16,9 @@ import org.mapstruct.Mapping;
 import org.tkit.quarkus.jpa.exceptions.ConstraintException;
 import org.tkit.quarkus.rs.mappers.OffsetDateTimeMapper;
 
-import gen.io.github.onecx.chat.rs.internal.model.ProblemDetailInvalidParamDTO;
-import gen.io.github.onecx.chat.rs.internal.model.ProblemDetailParamDTO;
-import gen.io.github.onecx.chat.rs.internal.model.ProblemDetailResponseDTO;
+import gen.org.tkit.onecx.chat.rs.internal.model.ProblemDetailInvalidParamDTO;
+import gen.org.tkit.onecx.chat.rs.internal.model.ProblemDetailParamDTO;
+import gen.org.tkit.onecx.chat.rs.internal.model.ProblemDetailResponseDTO;
 
 @Mapper(uses = { OffsetDateTimeMapper.class })
 public interface ExceptionMapper {

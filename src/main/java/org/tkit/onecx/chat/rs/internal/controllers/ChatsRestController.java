@@ -26,8 +26,8 @@ import org.tkit.onecx.chat.rs.internal.mappers.ExceptionMapper;
 import org.tkit.onecx.chat.rs.internal.services.ChatsService;
 import org.tkit.quarkus.jpa.exceptions.ConstraintException;
 
-import gen.io.github.onecx.chat.rs.internal.ChatsInternalApi;
-import gen.io.github.onecx.chat.rs.internal.model.*;
+import gen.org.tkit.onecx.chat.rs.internal.ChatsInternalApi;
+import gen.org.tkit.onecx.chat.rs.internal.model.*;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j

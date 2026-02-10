@@ -209,8 +209,8 @@
                         </goals>
                         <configuration>
                             <inputSpec>src/main/openapi/onecx-chat-internal-openapi.yaml</inputSpec>
-                            <apiPackage>gen.io.github.onecx.chat.rs.internal</apiPackage>
-                            <modelPackage>gen.io.github.onecx.chat.rs.internal.model</modelPackage>
+                            <apiPackage>gen.org.tkit.onecx.chat.rs.internal</apiPackage>
+                            <modelPackage>gen.org.tkit.onecx.chat.rs.internal.model</modelPackage>
                             <modelNameSuffix>DTO</modelNameSuffix>
                         </configuration>
                     </execution>
@@ -228,7 +228,7 @@
                         </goals>
                         <configuration>
                             <uri>
-                                https://raw.githubusercontent.com/onecx-apps/onecx-ai-management-svc/refs/heads/main/src/main/openapi/onecx-ai-v1.yaml
+                                https://raw.githubusercontent.com/onecx/onecx-ai-provider-svc/refs/heads/main/src/main/openapi/onecx-ai-v1.yaml
                             </uri>
                             <outputDirectory>target/tmp/openapi</outputDirectory>
                             <outputFileName>onecx-ai-svc-openapi.yaml</outputFileName>

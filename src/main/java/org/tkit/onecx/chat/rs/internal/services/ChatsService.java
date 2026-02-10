@@ -19,10 +19,10 @@ import gen.io.github.onecx.ai.clients.api.DispatchApi;
 import gen.io.github.onecx.ai.clients.model.ChatMessage;
 import gen.io.github.onecx.ai.clients.model.ChatRequest;
 import gen.io.github.onecx.ai.clients.model.Conversation;
-import gen.io.github.onecx.chat.rs.internal.model.AddParticipantDTO;
-import gen.io.github.onecx.chat.rs.internal.model.CreateChatDTO;
-import gen.io.github.onecx.chat.rs.internal.model.CreateMessageDTO;
-import gen.io.github.onecx.chat.rs.internal.model.UpdateChatDTO;
+import gen.org.tkit.onecx.chat.rs.internal.model.AddParticipantDTO;
+import gen.org.tkit.onecx.chat.rs.internal.model.CreateChatDTO;
+import gen.org.tkit.onecx.chat.rs.internal.model.CreateMessageDTO;
+import gen.org.tkit.onecx.chat.rs.internal.model.UpdateChatDTO;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j

@@ -35,7 +35,7 @@ quarkus.openapi-generator.codegen.spec.onecx_ai_svc_openapi_yaml.enable-security
 %prod.quarkus.datasource.jdbc.url=${DB_URL:jdbc:postgresql://postgresdb:5432/onecx-chat?sslmode=disable}
 %prod.quarkus.datasource.username=${DB_USER:onecx-chat}
 %prod.quarkus.datasource.password=${DB_PWD:onecx-chat}
-%prod.quarkus.rest-client.onecx_ai_svc.url=http://onecx-ai-management-svc:8080
+%prod.quarkus.rest-client.onecx_ai_svc.url=http://onecx-ai-provider-svc:8080
 ----
 ====
 
