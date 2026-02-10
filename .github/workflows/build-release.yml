@@ -5,7 +5,8 @@ on:
       - '**'
 jobs:
   release:
-    uses: onecx-apps/ci-quarkus/.github/workflows/build-release.yml@v2
+    uses: onecx/ci-quarkus/.github/workflows/build-release.yml@v1
     secrets: inherit
     with:
       native: true
+      helmEventTargetRepository: onecx/onecx-chat

@@ -1,7 +1,7 @@
 app:
   name: svc
   image:
-    repository: "onecx-apps/onecx-chat-svc"
+    repository: "onecx/onecx-chat-svc"
     tag: 999-SNAPSHOT
   db:
     enabled: true

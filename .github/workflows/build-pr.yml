@@ -5,7 +5,7 @@ on:
 
 jobs:
   pr:
-    uses: onecx-apps/ci-quarkus/.github/workflows/build-pr.yml@v2
+    uses: onecx/ci-quarkus/.github/workflows/build-pr.yml@v1
     secrets: inherit
     with:
       native: true

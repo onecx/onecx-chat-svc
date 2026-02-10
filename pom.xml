@@ -12,6 +12,7 @@
     </parent>
 
     <artifactId>onecx-chat-svc</artifactId>
+    <name>OneCX Chat Backend Service</name>
     <version>999-SNAPSHOT</version>
 
     <dependencies>

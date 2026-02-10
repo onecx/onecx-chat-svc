@@ -6,5 +6,5 @@ on:
       - 'docs/**'
 jobs:
   release:
-    uses: onecx-apps/ci-common/.github/workflows/documentation.yml@v2
+    uses: onecx/ci-common/.github/workflows/documentation.yml@v1
     secrets: inherit
