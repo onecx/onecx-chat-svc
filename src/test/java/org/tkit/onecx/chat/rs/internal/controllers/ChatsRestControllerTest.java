@@ -17,6 +17,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockserver.client.MockServerClient;
 import org.mockserver.model.Header;
+import org.tkit.onecx.chat.domain.criteria.ChatMessageSearchCriteria;
 import org.tkit.onecx.chat.test.AbstractTest;
 import org.tkit.quarkus.security.test.GenerateKeycloakClient;
 import org.tkit.quarkus.test.WithDBData;
@@ -781,5 +782,59 @@ class ChatsRestControllerTest extends AbstractTest {
                 exception.getDetail());
         Assertions.assertNotNull(exception.getInvalidParams());
         Assertions.assertEquals(1, exception.getInvalidParams().size());
+    }
+
+    @Test
+    void searchChatMessagesTest() {
+        var criteria = new ChatMessageSearchCriteria();
+
+        // CASE 1 — chatId = null → without participants and messages
+        criteria.setChatId(null);
+        var data = given()
+                .auth().oauth2(getKeycloakClientToken("testClient"))
+                .contentType(APPLICATION_JSON)
+                .body(criteria)
+                .post("/searchChatMessages")
+                .then()
+                .statusCode(OK.getStatusCode())
+                .contentType(APPLICATION_JSON)
+                .extract()
+                .as(ChatMessageResponseDTO.class);
+
+        assertThat(data).isNotNull();
+        assertThat(data.getMessages().getTotalElements()).isEqualTo(0);
+        assertThat(data.getMessages().getStream()).isEmpty();
+        assertThat(data.getParticipants()).isNotNull().hasSize(0);
+
+        // CASE 2 — chatId = "chat-22-222"
+        criteria.setChatId("chat-22-222");
+        data = given()
+                .auth().oauth2(getKeycloakClientToken("testClient"))
+                .contentType(APPLICATION_JSON)
+                .body(criteria)
+                .post("/searchChatMessages")
+                .then()
+                .statusCode(OK.getStatusCode())
+                .extract()
+                .as(ChatMessageResponseDTO.class);
+
+        assertThat(data.getMessages().getTotalElements()).isEqualTo(3);
+        assertThat(data.getMessages().getStream()).hasSize(3);
+        assertThat(data.getParticipants()).hasSize(1);
+
+        // CASE 3 — in criteria pageSize = 2
+        criteria.setPageSize(2);
+        data = given()
+                .auth().oauth2(getKeycloakClientToken("testClient"))
+                .contentType(APPLICATION_JSON)
+                .body(criteria)
+                .post("/searchChatMessages")
+                .then()
+                .extract()
+                .as(ChatMessageResponseDTO.class);
+
+        assertThat(data.getMessages().getTotalElements()).isEqualTo(3);
+        assertThat(data.getMessages().getStream()).hasSize(2);
+        assertThat(data.getParticipants()).hasSize(1);
     }
 }

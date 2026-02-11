@@ -15,6 +15,7 @@ import org.mapstruct.MappingConstants;
 import org.mapstruct.MappingTarget;
 import org.mapstruct.Named;
 import org.mapstruct.ValueMapping;
+import org.tkit.onecx.chat.domain.criteria.ChatMessageSearchCriteria;
 import org.tkit.onecx.chat.domain.criteria.ChatSearchCriteria;
 import org.tkit.onecx.chat.domain.models.Chat;
 import org.tkit.onecx.chat.domain.models.Message;
@@ -35,6 +36,11 @@ public interface ChatMapper {
 
     @Mapping(target = "removeStreamItem", ignore = true)
     ChatPageResultDTO mapPage(PageResult<Chat> page);
+
+    ChatMessageSearchCriteria map(ChatMessageSearchCriteriaDTO dto);
+
+    @Mapping(target = "removeStreamItem", ignore = true)
+    MessagePageResultDTO mapMessagePage(PageResult<Message> pageResult);
 
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "controlTraceabilityManual", ignore = true)
