@@ -16,6 +16,7 @@ import org.tkit.quarkus.jpa.daos.AbstractDAO;
 import org.tkit.quarkus.jpa.daos.Page;
 import org.tkit.quarkus.jpa.daos.PageResult;
 import org.tkit.quarkus.jpa.exceptions.DAOException;
+import org.tkit.quarkus.jpa.models.AbstractTraceableEntity_;
 import org.tkit.quarkus.jpa.models.TraceableEntity_;
 
 @ApplicationScoped
@@ -32,7 +33,7 @@ public class MessageDAO extends AbstractDAO<Message> {
 
             addSearchStringPredicate(predicates, cb, root.get(Message_.CHAT).get(TraceableEntity_.ID), criteria.getChatId());
             cq.where(cb.and(predicates.toArray(new Predicate[0])));
-            cq.orderBy(cb.asc(root.get(TraceableEntity_.CREATION_DATE)));
+            cq.orderBy(cb.asc(root.get(AbstractTraceableEntity_.CREATION_DATE)));
 
             return createPageQuery(cq, Page.of(criteria.getPageNumber(), criteria.getPageSize())).getPageResult();
 
