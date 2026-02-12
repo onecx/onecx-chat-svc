@@ -162,4 +162,6 @@ public interface ChatMapper {
     @Mapping(target = "userId", ignore = true)
     Message mapAiSvcMessage(ChatMessage chatResponse);
 
+    @Mapping(target = "removeParticipantsItem", ignore = true)
+    ChatMessageResponseDTO mapResponse(List<Participant> participants, PageResult<Message> messages);
 }

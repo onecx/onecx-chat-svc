@@ -1,12 +1,12 @@
 package org.tkit.onecx.chat.domain.daos;
 
-import java.util.ArrayList;
 import java.util.List;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
 
 import org.tkit.onecx.chat.domain.models.Participant;
+import org.tkit.onecx.chat.domain.models.Participant_;
 import org.tkit.quarkus.jpa.daos.AbstractDAO;
 import org.tkit.quarkus.jpa.exceptions.DAOException;
 
@@ -19,11 +19,11 @@ public class ParticipantDAO extends AbstractDAO<Participant> {
             var cb = this.getEntityManager().getCriteriaBuilder();
             var cq = cb.createQuery(Participant.class);
             var participantRoot = cq.from(Participant.class);
-            var chats = participantRoot.join("chats");
+            var chats = participantRoot.join(Participant_.chats);
 
             cq.select(participantRoot).where(cb.equal(chats.get("id"), chatId)).distinct(true);
 
-            return new ArrayList<>(this.getEntityManager().createQuery(cq).getResultList());
+            return this.getEntityManager().createQuery(cq).getResultList();
         } catch (Exception ex) {
             throw new DAOException(ParticipantDAO.ErrorKeys.ERROR_FIND_PARTICIPANTS_BY_CHAT_ID, ex);
         }

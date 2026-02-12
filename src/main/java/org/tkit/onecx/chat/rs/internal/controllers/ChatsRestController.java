@@ -145,10 +145,7 @@ public class ChatsRestController implements ChatsInternalApi {
         var criteria = mapper.map(chatMessageSearchCriteriaDTO);
         var msgResult = msgDao.findChatMessagesByCriteria(criteria);
         List<Participant> participantsResult = participantDao.getParticipantsOfChatById(criteria.getChatId());
-        ChatMessageResponseDTO chatMessageResponse = new ChatMessageResponseDTO();
-        chatMessageResponse.setParticipants(mapper.mapParticipantList(participantsResult));
-        chatMessageResponse.setMessages(mapper.mapMessagePage(msgResult));
-        return Response.ok(chatMessageResponse).build();
+        return Response.ok(mapper.mapResponse(participantsResult, msgResult)).build();
     }
 
     @Override

@@ -319,7 +319,6 @@ class ChatsRestControllerTest extends AbstractTest {
                 .post()
                 .then()
                 .statusCode(BAD_REQUEST.getStatusCode())
-
                 .extract().as(ProblemDetailResponseDTO.class);
 
         Assertions.assertNotNull(exception);
@@ -785,34 +784,38 @@ class ChatsRestControllerTest extends AbstractTest {
     }
 
     @Test
-    void searchChatMessagesTest() {
+    void searchChatMessagesWithNullOrderIdTest() {
         var criteria = new ChatMessageSearchCriteria();
 
-        // CASE 1 — chatId = null → without participants and messages
+        // CASE 1 — chatId = null → without participants and messages,but chatId is required
         criteria.setChatId(null);
         var data = given()
                 .auth().oauth2(getKeycloakClientToken("testClient"))
                 .contentType(APPLICATION_JSON)
                 .body(criteria)
-                .post("/searchChatMessages")
+                .post("/messages/search")
                 .then()
-                .statusCode(OK.getStatusCode())
+                .statusCode(BAD_REQUEST.getStatusCode())
                 .contentType(APPLICATION_JSON)
                 .extract()
-                .as(ChatMessageResponseDTO.class);
+                .as(ProblemDetailResponseDTO.class);
 
         assertThat(data).isNotNull();
-        assertThat(data.getMessages().getTotalElements()).isEqualTo(0);
-        assertThat(data.getMessages().getStream()).isEmpty();
-        assertThat(data.getParticipants()).isNotNull().hasSize(0);
+    }
+
+    @Test
+    void searchChatMessagesTest() {
+        var criteria = new ChatMessageSearchCriteria();
 
         // CASE 2 — chatId = "chat-22-222"
         criteria.setChatId("chat-22-222");
-        data = given()
+        criteria.setPageSize(50);
+        criteria.setPageNumber(0);
+        var data = given()
                 .auth().oauth2(getKeycloakClientToken("testClient"))
                 .contentType(APPLICATION_JSON)
                 .body(criteria)
-                .post("/searchChatMessages")
+                .post("/messages/search")
                 .then()
                 .statusCode(OK.getStatusCode())
                 .extract()
@@ -824,11 +827,12 @@ class ChatsRestControllerTest extends AbstractTest {
 
         // CASE 3 — in criteria pageSize = 2
         criteria.setPageSize(2);
+        criteria.setPageNumber(0);
         data = given()
                 .auth().oauth2(getKeycloakClientToken("testClient"))
                 .contentType(APPLICATION_JSON)
                 .body(criteria)
-                .post("/searchChatMessages")
+                .post("/messages/search")
                 .then()
                 .extract()
                 .as(ChatMessageResponseDTO.class);
@@ -836,5 +840,29 @@ class ChatsRestControllerTest extends AbstractTest {
         assertThat(data.getMessages().getTotalElements()).isEqualTo(3);
         assertThat(data.getMessages().getStream()).hasSize(2);
         assertThat(data.getParticipants()).hasSize(1);
+
     }
+
+    @Test
+    void searchChatMessagesWithOverMaximumPageSizeTest() {
+        var criteria = new ChatMessageSearchCriteria();
+
+        // CASE 4 — in criteria pageSize >50
+        criteria.setChatId("chat-22-222");
+        criteria.setPageSize(55);
+        criteria.setPageNumber(0);
+        var data = given()
+                .auth().oauth2(getKeycloakClientToken("testClient"))
+                .contentType(APPLICATION_JSON)
+                .body(criteria)
+                .post("/messages/search")
+                .then()
+                .statusCode(BAD_REQUEST.getStatusCode())
+                .contentType(APPLICATION_JSON)
+                .extract()
+                .as(ProblemDetailResponseDTO.class);
+
+        assertThat(data).isNotNull();
+    }
+
 }

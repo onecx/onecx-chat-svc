@@ -17,6 +17,15 @@ import lombok.Setter;
 @Setter
 @Entity
 @Table(name = "PARTICIPANT")
+@NamedEntityGraph(name = "Participant.withChats", attributeNodes = {
+        @NamedAttributeNode(value = "chats", subgraph = "chatGraph")
+}, subgraphs = {
+        @NamedSubgraph(name = "chatGraph", attributeNodes = {
+                @NamedAttributeNode("id"),
+                @NamedAttributeNode("topic"),
+                @NamedAttributeNode("type")
+        })
+})
 public class Participant extends TraceableEntity {
 
     @TenantId

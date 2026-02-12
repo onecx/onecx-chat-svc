@@ -289,10 +289,18 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/ChatPageResult'
-  /internal/chats/searchChatMessages:
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetailResponse'
+        "404":
+          description: Chat message not found
+  /internal/chats/messages/search:
     post:
       security:
-        - oauth2: [ ocx-chat:all, ocx-chat:write ]
+        - oauth2: [ ocx-chat:all, ocx-chat:read ]
       tags:
         - chatsInternal
       description: Search for chat messages
@@ -367,6 +375,8 @@ components:
           default: 10
           type: integer
     ChatMessageSearchCriteria:
+      required:
+        - chatId
       type: object
       properties:
         chatId:

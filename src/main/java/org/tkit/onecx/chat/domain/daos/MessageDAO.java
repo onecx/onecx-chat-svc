@@ -4,13 +4,13 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
 
 import org.tkit.onecx.chat.domain.criteria.ChatMessageSearchCriteria;
-import org.tkit.onecx.chat.domain.models.Chat_;
 import org.tkit.onecx.chat.domain.models.Message;
 import org.tkit.onecx.chat.domain.models.Message_;
 import org.tkit.quarkus.jpa.daos.AbstractDAO;
 import org.tkit.quarkus.jpa.daos.Page;
 import org.tkit.quarkus.jpa.daos.PageResult;
 import org.tkit.quarkus.jpa.exceptions.DAOException;
+import org.tkit.quarkus.jpa.models.TraceableEntity_;
 
 @ApplicationScoped
 @Transactional(Transactional.TxType.NOT_SUPPORTED)
@@ -18,10 +18,6 @@ public class MessageDAO extends AbstractDAO<Message> {
 
     public PageResult<Message> findChatMessagesByCriteria(ChatMessageSearchCriteria criteria) {
         try {
-            if (criteria == null) {
-                throw new DAOException(MessageDAO.ErrorKeys.ERROR_FIND_CHAT_MESSAGES_BY_CRITERIA,
-                        new NullPointerException("Criteria is null"));
-            }
 
             if (criteria.getChatId() == null || criteria.getChatId().isBlank()) {
                 return PageResult.empty();
@@ -33,19 +29,11 @@ public class MessageDAO extends AbstractDAO<Message> {
 
             cq.where(
                     cb.equal(
-                            root.get(Message_.chat).get(Chat_.id),
+                            root.get(Message_.chat).get(TraceableEntity_.id),
                             criteria.getChatId()));
 
-            int pageNumber = criteria.getPageNumber() != null ? criteria.getPageNumber() : 0;
-            int pageSize = criteria.getPageSize() != null ? criteria.getPageSize() : 20;
-            if (pageSize > 50) {
-                pageSize = 50;
-            }
+            return createPageQuery(cq, Page.of(criteria.getPageNumber(), criteria.getPageSize())).getPageResult();
 
-            return createPageQuery(cq, Page.of(pageNumber, pageSize)).getPageResult();
-
-        } catch (DAOException ex) {
-            throw ex;
         } catch (Exception ex) {
             throw new DAOException(MessageDAO.ErrorKeys.ERROR_FIND_CHAT_MESSAGES_BY_CRITERIA, ex);
         }
