@@ -31,9 +31,7 @@ public class MessageDAO extends AbstractDAO<Message> {
             List<Predicate> predicates = new ArrayList<>();
 
             addSearchStringPredicate(predicates, cb, root.get(Message_.CHAT).get(TraceableEntity_.ID), criteria.getChatId());
-            if (!predicates.isEmpty()) {
-                cq.where(cb.and(predicates.toArray(new Predicate[0])));
-            }
+            cq.where(cb.and(predicates.toArray(new Predicate[0])));
             cq.orderBy(cb.asc(root.get(Message_.CREATION_DATE)));
 
             return createPageQuery(cq, Page.of(criteria.getPageNumber(), criteria.getPageSize())).getPageResult();
