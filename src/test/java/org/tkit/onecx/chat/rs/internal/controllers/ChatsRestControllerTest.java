@@ -318,7 +318,6 @@ class ChatsRestControllerTest extends AbstractTest {
                 .post()
                 .then()
                 .statusCode(BAD_REQUEST.getStatusCode())
-
                 .extract().as(ProblemDetailResponseDTO.class);
 
         Assertions.assertNotNull(exception);
@@ -782,4 +781,85 @@ class ChatsRestControllerTest extends AbstractTest {
         Assertions.assertNotNull(exception.getInvalidParams());
         Assertions.assertEquals(1, exception.getInvalidParams().size());
     }
+
+    @Test
+    void searchChatMessagesWithNullOrderIdTest() {
+        var criteria = new ChatMessageSearchCriteriaDTO();
+
+        // CASE 1 — chatId = null → without participants and messages,but chatId is required
+        criteria.setChatId(null);
+        var data = given()
+                .auth().oauth2(getKeycloakClientToken("testClient"))
+                .contentType(APPLICATION_JSON)
+                .body(criteria)
+                .post("/messages/search")
+                .then()
+                .statusCode(BAD_REQUEST.getStatusCode())
+                .contentType(APPLICATION_JSON)
+                .extract()
+                .as(ProblemDetailResponseDTO.class);
+
+        assertThat(data).isNotNull();
+    }
+
+    @Test
+    void searchChatMessagesTest() {
+        var criteria = new ChatMessageSearchCriteriaDTO();
+
+        // CASE 2 — chatId = "chat-22-222"
+        criteria.setChatId("chat-22-222");
+        var data = given()
+                .auth().oauth2(getKeycloakClientToken("testClient"))
+                .contentType(APPLICATION_JSON)
+                .body(criteria)
+                .post("/messages/search")
+                .then()
+                .statusCode(OK.getStatusCode())
+                .extract()
+                .as(ChatMessageResponseDTO.class);
+
+        assertThat(data.getMessages().getTotalElements()).isEqualTo(3);
+        assertThat(data.getMessages().getStream()).hasSize(3);
+        assertThat(data.getParticipants()).hasSize(1);
+
+        // CASE 3 — in criteria pageSize = 2
+        criteria.setPageSize(2);
+        criteria.setPageNumber(0);
+        data = given()
+                .auth().oauth2(getKeycloakClientToken("testClient"))
+                .contentType(APPLICATION_JSON)
+                .body(criteria)
+                .post("/messages/search")
+                .then()
+                .extract()
+                .as(ChatMessageResponseDTO.class);
+
+        assertThat(data.getMessages().getTotalElements()).isEqualTo(3);
+        assertThat(data.getMessages().getStream()).hasSize(2);
+        assertThat(data.getParticipants()).hasSize(1);
+
+    }
+
+    @Test
+    void searchChatMessagesWithOverMaximumPageSizeTest() {
+        var criteria = new ChatMessageSearchCriteriaDTO();
+
+        // CASE 4 — in criteria pageSize >50
+        criteria.setChatId("chat-22-222");
+        criteria.setPageSize(55);
+        criteria.setPageNumber(0);
+        var data = given()
+                .auth().oauth2(getKeycloakClientToken("testClient"))
+                .contentType(APPLICATION_JSON)
+                .body(criteria)
+                .post("/messages/search")
+                .then()
+                .statusCode(BAD_REQUEST.getStatusCode())
+                .contentType(APPLICATION_JSON)
+                .extract()
+                .as(ProblemDetailResponseDTO.class);
+
+        assertThat(data).isNotNull();
+    }
+
 }

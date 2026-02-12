@@ -18,6 +18,8 @@ import org.jboss.resteasy.reactive.ClientWebApplicationException;
 import org.jboss.resteasy.reactive.RestResponse;
 import org.jboss.resteasy.reactive.server.ServerExceptionMapper;
 import org.tkit.onecx.chat.domain.daos.ChatDAO;
+import org.tkit.onecx.chat.domain.daos.MessageDAO;
+import org.tkit.onecx.chat.domain.daos.ParticipantDAO;
 import org.tkit.onecx.chat.domain.models.Chat;
 import org.tkit.onecx.chat.domain.models.Message;
 import org.tkit.onecx.chat.domain.models.Participant;
@@ -40,6 +42,12 @@ public class ChatsRestController implements ChatsInternalApi {
 
     @Inject
     ChatDAO dao;
+
+    @Inject
+    MessageDAO msgDao;
+
+    @Inject
+    ParticipantDAO participantDao;
 
     @Inject
     ChatMapper mapper;
@@ -130,6 +138,14 @@ public class ChatsRestController implements ChatsInternalApi {
         List<Message> messageList = new ArrayList<>(messages);
         return Response.ok(mapper.mapMessageList(messageList)).build();
 
+    }
+
+    @Override
+    public Response searchChatMessages(ChatMessageSearchCriteriaDTO chatMessageSearchCriteriaDTO) {
+        var criteria = mapper.map(chatMessageSearchCriteriaDTO);
+        var msgResult = msgDao.findChatMessagesByCriteria(criteria);
+        List<Participant> participantsResult = participantDao.getParticipantsOfChatById(criteria.getChatId());
+        return Response.ok(mapper.mapResponse(participantsResult, msgResult)).build();
     }
 
     @Override

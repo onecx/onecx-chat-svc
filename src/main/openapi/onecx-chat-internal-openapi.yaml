@@ -7,7 +7,7 @@ servers:
   - url: "http://onecx-chat-svc:8080"
 tags:
   - name: chatsInternal
-  - name: messagesInternal  
+  - name: messagesInternal
 paths:
   /internal/chats/{chatId}/messages:
     get:
@@ -21,9 +21,9 @@ paths:
         - name: chatId
           in: path
           required: true
-          description: The ID of the chat          
+          description: The ID of the chat
           schema:
-            type: string      
+            type: string
       responses:
         "200":
           description: OK
@@ -45,7 +45,7 @@ paths:
           in: path
           required: true
           schema:
-            type: string      
+            type: string
       requestBody:
         required: true
         content:
@@ -83,9 +83,9 @@ paths:
         - name: chatId
           in: path
           required: true
-          description: The ID of the chat          
+          description: The ID of the chat
           schema:
-            type: string      
+            type: string
       responses:
         "200":
           description: OK
@@ -107,7 +107,7 @@ paths:
           in: path
           required: true
           schema:
-            type: string      
+            type: string
       requestBody:
         required: true
         content:
@@ -132,7 +132,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProblemDetailResponse'                
+                $ref: '#/components/schemas/ProblemDetailResponse'
   /internal/chats:
     get:
       security:
@@ -269,7 +269,7 @@ paths:
   /internal/chats/search:
     post:
       security:
-        - oauth2: [ ocx-chat:all, ocx-chat:write ]
+        - oauth2: [ ocx-chat:all, ocx-chat:read ]
       tags:
         - chatsInternal
       description: Search for chats
@@ -289,6 +289,37 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/ChatPageResult'
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetailResponse'
+        "404":
+          description: Chat message not found
+  /internal/chats/messages/search:
+    post:
+      security:
+        - oauth2: [ ocx-chat:all, ocx-chat:read ]
+      tags:
+        - chatsInternal
+      description: Search for chat messages
+      operationId: searchChatMessages
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatMessageSearchCriteria'
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ChatMessageResponse'
 components:
   securitySchemes:
     oauth2:
@@ -343,6 +374,24 @@ components:
           description: The size of page
           default: 10
           type: integer
+    ChatMessageSearchCriteria:
+      required:
+        - chatId
+      type: object
+      properties:
+        chatId:
+          type: string
+        pageNumber:
+          format: int32
+          description: The number of page.
+          default: 0
+          type: integer
+        pageSize:
+          format: int32
+          description: The size of page
+          default: 20
+          maximum: 50
+          type: integer
     ChatPageResult:
       type: object
       properties:
@@ -383,6 +432,15 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Message'
+    ChatMessageResponse:
+      type: object
+      properties:
+        participants:
+          type: array
+          items:
+            $ref: '#/components/schemas/Participant'
+        messages:
+          $ref: '#/components/schemas/MessagePageResult'
     Chat:
       required:
         - type
