@@ -17,16 +17,11 @@ import lombok.Setter;
 @Setter
 @Entity
 @Table(name = "PARTICIPANT")
-@NamedEntityGraph(name = "Participant.withChats", attributeNodes = {
-        @NamedAttributeNode(value = "chats", subgraph = "chatGraph")
-}, subgraphs = {
-        @NamedSubgraph(name = "chatGraph", attributeNodes = {
-                @NamedAttributeNode("id"),
-                @NamedAttributeNode("topic"),
-                @NamedAttributeNode("type")
-        })
-})
+@NamedEntityGraph(name = Participant.CHAT_LOAD, attributeNodes = {
+        @NamedAttributeNode("chats") })
 public class Participant extends TraceableEntity {
+
+    public static final String CHAT_LOAD = "Participant.withChats";
 
     @TenantId
     @Column(name = "TENANT_ID")

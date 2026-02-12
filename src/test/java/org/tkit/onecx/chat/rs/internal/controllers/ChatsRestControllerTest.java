@@ -17,7 +17,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockserver.client.MockServerClient;
 import org.mockserver.model.Header;
-import org.tkit.onecx.chat.domain.criteria.ChatMessageSearchCriteria;
 import org.tkit.onecx.chat.test.AbstractTest;
 import org.tkit.quarkus.security.test.GenerateKeycloakClient;
 import org.tkit.quarkus.test.WithDBData;
@@ -785,7 +784,7 @@ class ChatsRestControllerTest extends AbstractTest {
 
     @Test
     void searchChatMessagesWithNullOrderIdTest() {
-        var criteria = new ChatMessageSearchCriteria();
+        var criteria = new ChatMessageSearchCriteriaDTO();
 
         // CASE 1 — chatId = null → without participants and messages,but chatId is required
         criteria.setChatId(null);
@@ -805,7 +804,7 @@ class ChatsRestControllerTest extends AbstractTest {
 
     @Test
     void searchChatMessagesTest() {
-        var criteria = new ChatMessageSearchCriteria();
+        var criteria = new ChatMessageSearchCriteriaDTO();
 
         // CASE 2 — chatId = "chat-22-222"
         criteria.setChatId("chat-22-222");
@@ -843,7 +842,7 @@ class ChatsRestControllerTest extends AbstractTest {
 
     @Test
     void searchChatMessagesWithOverMaximumPageSizeTest() {
-        var criteria = new ChatMessageSearchCriteria();
+        var criteria = new ChatMessageSearchCriteriaDTO();
 
         // CASE 4 — in criteria pageSize >50
         criteria.setChatId("chat-22-222");
