@@ -19,6 +19,7 @@ public class ParticipantDAO extends AbstractDAO<Participant> {
             var cb = this.getEntityManager().getCriteriaBuilder();
             var cq = cb.createQuery(Participant.class);
             var participantRoot = cq.from(Participant.class);
+
             var chats = participantRoot.join(Participant_.chats);
 
             cq.select(participantRoot).where(cb.equal(chats.get("id"), chatId)).distinct(true);

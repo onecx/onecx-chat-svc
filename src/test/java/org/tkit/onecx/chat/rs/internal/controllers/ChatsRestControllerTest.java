@@ -809,8 +809,6 @@ class ChatsRestControllerTest extends AbstractTest {
 
         // CASE 2 — chatId = "chat-22-222"
         criteria.setChatId("chat-22-222");
-        criteria.setPageSize(50);
-        criteria.setPageNumber(0);
         var data = given()
                 .auth().oauth2(getKeycloakClientToken("testClient"))
                 .contentType(APPLICATION_JSON)

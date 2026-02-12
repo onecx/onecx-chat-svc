@@ -269,7 +269,7 @@ paths:
   /internal/chats/search:
     post:
       security:
-        - oauth2: [ ocx-chat:all, ocx-chat:write ]
+        - oauth2: [ ocx-chat:all, ocx-chat:read ]
       tags:
         - chatsInternal
       description: Search for chats

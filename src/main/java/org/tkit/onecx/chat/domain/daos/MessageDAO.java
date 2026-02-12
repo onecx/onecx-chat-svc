@@ -32,7 +32,10 @@ public class MessageDAO extends AbstractDAO<Message> {
                             root.get(Message_.chat).get(TraceableEntity_.id),
                             criteria.getChatId()));
 
-            return createPageQuery(cq, Page.of(criteria.getPageNumber(), criteria.getPageSize())).getPageResult();
+            int pageNumber = criteria.getPageNumber() != null ? criteria.getPageNumber() : 0;
+            int pageSize = criteria.getPageSize() != null ? criteria.getPageSize() : 20;
+
+            return createPageQuery(cq, Page.of(pageNumber, pageSize)).getPageResult();
 
         } catch (Exception ex) {
             throw new DAOException(MessageDAO.ErrorKeys.ERROR_FIND_CHAT_MESSAGES_BY_CRITERIA, ex);
