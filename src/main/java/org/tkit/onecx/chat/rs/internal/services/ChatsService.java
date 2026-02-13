@@ -19,10 +19,7 @@ import gen.io.github.onecx.ai.clients.api.DispatchApi;
 import gen.io.github.onecx.ai.clients.model.ChatMessage;
 import gen.io.github.onecx.ai.clients.model.ChatRequest;
 import gen.io.github.onecx.ai.clients.model.Conversation;
-import gen.org.tkit.onecx.chat.rs.internal.model.AddParticipantDTO;
-import gen.org.tkit.onecx.chat.rs.internal.model.CreateChatDTO;
-import gen.org.tkit.onecx.chat.rs.internal.model.CreateMessageDTO;
-import gen.org.tkit.onecx.chat.rs.internal.model.UpdateChatDTO;
+import gen.org.tkit.onecx.chat.rs.internal.model.*;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -49,20 +46,21 @@ public class ChatsService {
     @Inject
     ExceptionMapper exceptionMapper;
 
+    @Inject
+    ParticipantService participantService;
+
     @Transactional
     public Chat createChat(CreateChatDTO createChatDTO) {
         var chat = mapper.create(createChatDTO);
         chat = dao.create(chat);
 
         if (createChatDTO.getParticipants() != null && !createChatDTO.getParticipants().isEmpty()) {
-            var participants = mapper.mapParticipantDTOs(createChatDTO.getParticipants());
-            for (Participant participant : participants) {
-                participant = participantDao.create(participant);
-                chat.getParticipants().add(participant);
-                participant.getChats().add(chat);
-                participantDao.update(participant);
+            for (ParticipantDTO participantDTO : createChatDTO.getParticipants()) {
+                var chatParticipant = participantService.getNewOrUpdatedParticipant(participantDTO);
+                chat.getParticipants().add(chatParticipant);
+                chatParticipant.getChats().add(chat);
+                participantDao.update(chatParticipant);
             }
-
         }
         chat = dao.update(chat);
         return chat;
@@ -106,12 +104,13 @@ public class ChatsService {
 
     @Transactional
     public Participant addParticipant(Chat chat, AddParticipantDTO addParticipantDTO) {
-        var participant = mapper.addParticipant(addParticipantDTO);
-
+        var participant = participantService.getNewOrUpdatedParticipant(addParticipantDTO);
+        if (participant.getChats().contains(chat)) {
+            return participant;
+        }
         participant.getChats().add(chat);
         chat.getParticipants().add(participant);
-
-        participant = participantDao.create(participant);
+        participant = participantDao.update(participant);
         dao.update(chat);
         return participant;
     }

@@ -8,8 +8,8 @@
 	<CHAT guid="chat-DELETE_1" optlock="0" type="AI_CHAT" app_id="appId" tenant_id="default" creationuser="user2" user_id="user2"/>
 
 	<!-- PARTICIPANT -->
-	<PARTICIPANT guid="participant-11-111" optlock="0" type="ASSISTANT" user_id="chat" user_name="Bot" tenant_id="default"/>
-	<PARTICIPANT guid="participant-22-222" optlock="0" type="HUMAN" user_id="user1" user_name="Human"  tenant_id="default"/>
+	<PARTICIPANT guid="participant-11-111" optlock="0" type="ASSISTANT" user_id="chat" user_name="Bot" email="bot@assistant.ai" tenant_id="default"/>
+	<PARTICIPANT guid="participant-22-222" optlock="0" type="HUMAN" user_id="user1" user_name="Human" email="user1@example.com" tenant_id="default"/>
 
 	<!-- MESSAGE -->
 	<MESSAGE guid="msg-11-111" optlock="0" type="ASSISTANT" text="How can I help you?" user_id="Bot" tenant_id="default" chat_id="chat-22-222"/>
@@ -26,8 +26,8 @@
 	<CHAT guid="t-chat-DELETE_1" optlock="0" type="AI_CHAT" app_id="appId" tenant_id="tenant-200" creationuser="user2" user_id="user2"/>
 
 	<!-- PARTICIPANT -->
-	<PARTICIPANT guid="t-participant-11-111" optlock="0" type="ASSISTANT" user_id="chat" user_name="Bot" tenant_id="default"/>
-	<PARTICIPANT guid="t-participant-22-222" optlock="0" type="HUMAN" user_id="user1" user_name="Human"  tenant_id="default"/>
+	<PARTICIPANT guid="t-participant-11-111" optlock="0" type="ASSISTANT" user_id="chat" user_name="Bot" email="bot@assistant.ai" tenant_id="default"/>
+	<PARTICIPANT guid="t-participant-22-222" optlock="0" type="HUMAN" user_id="user1" user_name="Human" email="user1@example.com" tenant_id="default"/>
 
 
 	<!-- MESSAGE -->
