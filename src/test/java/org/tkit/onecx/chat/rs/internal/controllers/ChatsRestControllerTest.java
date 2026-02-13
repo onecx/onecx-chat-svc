@@ -366,6 +366,8 @@ class ChatsRestControllerTest extends AbstractTest {
 
         assertThat(chatResponseDto).isNotNull();
         assertThat(chatResponseDto.getParticipants()).isNotNull().isNotEmpty().hasSize(1);
+        assertThat(chatResponseDto.getParticipants().get(0).getUserId()).isEqualTo("jdoe");
+        assertThat(chatResponseDto.getParticipants().get(0).getEmail()).isEqualTo("example@email.com");
 
         // create message
         var messageDto = new CreateMessageDTO();
@@ -460,6 +462,233 @@ class ChatsRestControllerTest extends AbstractTest {
         assertThat(response).isNotNull();
         assertThat(response).isNotNull().isNotEmpty().hasSize(1);
         assertThat(response.get(0).getType()).isEqualTo(ParticipantTypeDTO.HUMAN);
+        assertThat(response.get(0).getUserId()).isEqualTo("ne.mail");
+        assertThat(response.get(0).getEmail()).isEqualTo("name@email.com");
+        assertThat(response.get(0).getUserName()).isEqualTo("user");
+    }
+
+    @Test
+    void createChatWithExistingParticipantTest() {
+        var chatDto = new CreateChatDTO();
+        chatDto.setAppId("appId");
+        chatDto.setType(ChatTypeDTO.HUMAN_DIRECT_CHAT);
+
+        ParticipantDTO participantDto = new ParticipantDTO();
+        participantDto.setEmail("updated@email.com");
+        participantDto.setUserId("user1"); // This userId already exists in testdata
+        participantDto.setUserName("Updated User Name");
+        participantDto.setType(ParticipantTypeDTO.HUMAN);
+        chatDto.addParticipantsItem(participantDto);
+
+        // Create chat - should reuse existing participant with updated data
+        var chat = given()
+                .auth().oauth2(getKeycloakClientToken("testClient"))
+                .when()
+                .contentType(APPLICATION_JSON)
+                .body(chatDto)
+                .post()
+                .then()
+                .statusCode(CREATED.getStatusCode())
+                .extract()
+                .body().as(ChatDTO.class);
+
+        Assertions.assertNotNull(chat);
+
+        var chatResponseDto = given()
+                .auth().oauth2(getKeycloakClientToken("testClient"))
+                .contentType(APPLICATION_JSON)
+                .pathParam("id", chat.getId())
+                .get("{id}")
+                .then().statusCode(OK.getStatusCode())
+                .contentType(APPLICATION_JSON)
+                .extract()
+                .body().as(ChatDTO.class);
+
+        assertThat(chatResponseDto).isNotNull();
+        assertThat(chatResponseDto.getParticipants()).isNotNull().isNotEmpty().hasSize(1);
+        assertThat(chatResponseDto.getParticipants().get(0).getUserId()).isEqualTo("user1");
+        // Participant should be updated with new data
+        assertThat(chatResponseDto.getParticipants().get(0).getEmail()).isEqualTo("updated@email.com");
+        assertThat(chatResponseDto.getParticipants().get(0).getUserName()).isEqualTo("Updated User Name");
+    }
+
+    @Test
+    void createChatWithMultipleParticipantsTest() {
+        // Create chat with multiple participants - mix of new and existing
+        var chatDto = new CreateChatDTO();
+        chatDto.setAppId("appId");
+        chatDto.setType(ChatTypeDTO.HUMAN_GROUP_CHAT);
+
+        // Existing participant
+        ParticipantDTO participant1 = new ParticipantDTO();
+        participant1.setEmail("user1@email.com");
+        participant1.setUserId("user1"); // Exists in testdata
+        participant1.setUserName("User One");
+        participant1.setType(ParticipantTypeDTO.HUMAN);
+        chatDto.addParticipantsItem(participant1);
+
+        // New participant
+        ParticipantDTO participant2 = new ParticipantDTO();
+        participant2.setEmail("newuser@email.com");
+        participant2.setUserId("newuser");
+        participant2.setUserName("New User");
+        participant2.setType(ParticipantTypeDTO.HUMAN);
+        chatDto.addParticipantsItem(participant2);
+
+        var chat = given()
+                .auth().oauth2(getKeycloakClientToken("testClient"))
+                .when()
+                .contentType(APPLICATION_JSON)
+                .body(chatDto)
+                .post()
+                .then()
+                .statusCode(CREATED.getStatusCode())
+                .extract()
+                .body().as(ChatDTO.class);
+
+        Assertions.assertNotNull(chat);
+
+        var chatResponseDto = given()
+                .auth().oauth2(getKeycloakClientToken("testClient"))
+                .contentType(APPLICATION_JSON)
+                .pathParam("id", chat.getId())
+                .get("{id}")
+                .then().statusCode(OK.getStatusCode())
+                .contentType(APPLICATION_JSON)
+                .extract()
+                .body().as(ChatDTO.class);
+
+        assertThat(chatResponseDto).isNotNull();
+        assertThat(chatResponseDto.getParticipants()).isNotNull().hasSize(2);
+
+        // Check both participants are present
+        var userIds = chatResponseDto.getParticipants().stream()
+                .map(ParticipantDTO::getUserId)
+                .toList();
+        assertThat(userIds).containsExactlyInAnyOrder("user1", "newuser");
+    }
+
+    @Test
+    void addExistingParticipantTest() {
+        // Create a chat first
+        var chatDto = new CreateChatDTO();
+        chatDto.setAppId("appId");
+        chatDto.setType(ChatTypeDTO.AI_CHAT);
+
+        var chat = given()
+                .auth().oauth2(getKeycloakClientToken("testClient"))
+                .when()
+                .contentType(APPLICATION_JSON)
+                .body(chatDto)
+                .post()
+                .then()
+                .statusCode(CREATED.getStatusCode())
+                .extract()
+                .body().as(ChatDTO.class);
+
+        Assertions.assertNotNull(chat);
+
+        // Add existing participant with updated data
+        var addParticipantDto = new AddParticipantDTO();
+        addParticipantDto.setUserId("user1"); // Already exists in testdata
+        addParticipantDto.setEmail("updated.user1@email.com");
+        addParticipantDto.setUserName("Updated User One");
+        addParticipantDto.setType(ParticipantTypeDTO.HUMAN);
+
+        given()
+                .auth().oauth2(getKeycloakClientToken("testClient"))
+                .pathParam("chatId", chat.getId())
+                .when()
+                .contentType(APPLICATION_JSON)
+                .body(addParticipantDto)
+                .post("{chatId}/participants")
+                .then()
+                .statusCode(CREATED.getStatusCode())
+                .extract();
+
+        // Load participants and verify
+        var response = given()
+                .auth().oauth2(getKeycloakClientToken("testClient"))
+                .contentType(APPLICATION_JSON)
+                .pathParam("chatId", chat.getId())
+                .get("{chatId}/participants")
+                .then()
+                .statusCode(OK.getStatusCode())
+                .contentType(APPLICATION_JSON)
+                .extract().as(new TypeRef<List<ParticipantDTO>>() {
+                });
+
+        assertThat(response).isNotNull().isNotEmpty().hasSize(1);
+        assertThat(response.get(0).getUserId()).isEqualTo("user1");
+        assertThat(response.get(0).getEmail()).isEqualTo("updated.user1@email.com");
+        assertThat(response.get(0).getUserName()).isEqualTo("Updated User One");
+    }
+
+    @Test
+    void addSameParticipantTwiceToChatTest() {
+        // Create a chat
+        var chatDto = new CreateChatDTO();
+        chatDto.setAppId("appId");
+        chatDto.setType(ChatTypeDTO.AI_CHAT);
+
+        var chat = given()
+                .auth().oauth2(getKeycloakClientToken("testClient"))
+                .when()
+                .contentType(APPLICATION_JSON)
+                .body(chatDto)
+                .post()
+                .then()
+                .statusCode(CREATED.getStatusCode())
+                .extract()
+                .body().as(ChatDTO.class);
+
+        Assertions.assertNotNull(chat);
+
+        // Add participant for the first time
+        var addParticipantDto = new AddParticipantDTO();
+        addParticipantDto.setUserId("uniqueuser");
+        addParticipantDto.setEmail("unique@email.com");
+        addParticipantDto.setUserName("Unique User");
+        addParticipantDto.setType(ParticipantTypeDTO.HUMAN);
+
+        given()
+                .auth().oauth2(getKeycloakClientToken("testClient"))
+                .pathParam("chatId", chat.getId())
+                .when()
+                .contentType(APPLICATION_JSON)
+                .body(addParticipantDto)
+                .post("{chatId}/participants")
+                .then()
+                .statusCode(CREATED.getStatusCode());
+
+        // Try to add same participant again with updated email
+        addParticipantDto.setEmail("updated.unique@email.com");
+
+        given()
+                .auth().oauth2(getKeycloakClientToken("testClient"))
+                .pathParam("chatId", chat.getId())
+                .when()
+                .contentType(APPLICATION_JSON)
+                .body(addParticipantDto)
+                .post("{chatId}/participants")
+                .then()
+                .statusCode(CREATED.getStatusCode());
+
+        // Load participants - should still have only 1 participant with updated data
+        var response = given()
+                .auth().oauth2(getKeycloakClientToken("testClient"))
+                .contentType(APPLICATION_JSON)
+                .pathParam("chatId", chat.getId())
+                .get("{chatId}/participants")
+                .then()
+                .statusCode(OK.getStatusCode())
+                .contentType(APPLICATION_JSON)
+                .extract().as(new TypeRef<List<ParticipantDTO>>() {
+                });
+
+        assertThat(response).isNotNull().isNotEmpty().hasSize(1);
+        assertThat(response.get(0).getUserId()).isEqualTo("uniqueuser");
+        assertThat(response.get(0).getEmail()).isEqualTo("updated.unique@email.com");
     }
 
     @Test
