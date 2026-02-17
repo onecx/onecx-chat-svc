@@ -362,8 +362,6 @@ components:
           type: string
         appId:
           type: string
-        userId:
-          type: string
         pageNumber:
           format: int32
           description: The number of page.
