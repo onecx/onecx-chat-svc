@@ -164,4 +164,14 @@ public interface ChatMapper {
 
     @Mapping(target = "removeParticipantsItem", ignore = true)
     ChatMessageResponseDTO mapResponse(List<Participant> participants, PageResult<Message> messages);
+
+    @Mapping(target = "controlTraceabilityManual", ignore = true)
+    @Mapping(target = "modificationCount", ignore = true)
+    @Mapping(target = "persisted", ignore = true)
+    @Mapping(target = "tenantId", ignore = true)
+    @Mapping(target = "chats", ignore = true)
+    @Mapping(target = "id", ignore = true)
+    void updateParticipant(@MappingTarget Participant participant, ParticipantDTO participantDTO);
+
+    ParticipantDTO mapToParticipantDTO(AddParticipantDTO addParticipantDTO);
 }

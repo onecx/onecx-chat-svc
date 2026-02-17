@@ -1,6 +1,7 @@
 package org.tkit.onecx.chat.domain.daos;
 
 import java.util.List;
+import java.util.Optional;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
@@ -31,8 +32,26 @@ public class ParticipantDAO extends AbstractDAO<Participant> {
         }
     }
 
-    public enum ErrorKeys {
+    public Optional<Participant> getParticipantByUserId(String userId) {
+        try {
+            var cb = this.getEntityManager().getCriteriaBuilder();
+            var cq = cb.createQuery(Participant.class);
+            var root = cq.from(Participant.class);
+            var userIdEquals = cb.equal(root.get(Participant_.USER_ID), userId);
+            cq.where(userIdEquals);
 
+            var results = this.getEntityManager().createQuery(cq).getResultList();
+            if (results.isEmpty()) {
+                return Optional.empty();
+            }
+            return Optional.ofNullable(results.get(0));
+        } catch (Exception e) {
+            throw new DAOException(ErrorKeys.ERROR_GET_PARTICIPANT_BY_USER_ID, e);
+        }
+    }
+
+    public enum ErrorKeys {
+        ERROR_GET_PARTICIPANT_BY_USER_ID,
         ERROR_CREATE_PARTICIPANT,
         ERROR_FIND_PARTICIPANTS_BY_CHAT_ID
     }
