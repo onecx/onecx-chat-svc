@@ -647,6 +647,9 @@ components:
           type: string
         id:
           type: string
+        userId:
+          type: string
+          description: userId of the chat creator
         type:
           $ref: '#/components/schemas/ChatType'
         topic:

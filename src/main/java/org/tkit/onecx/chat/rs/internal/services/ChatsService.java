@@ -54,7 +54,7 @@ public class ChatsService {
         var chat = mapper.create(createChatDTO);
         chat = dao.create(chat);
 
-        if (createChatDTO.getParticipants() != null && !createChatDTO.getParticipants().isEmpty()) {
+        if (!createChatDTO.getParticipants().isEmpty()) {
             for (ParticipantDTO participantDTO : createChatDTO.getParticipants()) {
                 var chatParticipant = participantService.getNewOrUpdatedParticipant(participantDTO);
                 chat.getParticipants().add(chatParticipant);

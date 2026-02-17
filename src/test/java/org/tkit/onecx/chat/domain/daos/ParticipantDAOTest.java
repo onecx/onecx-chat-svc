@@ -30,6 +30,8 @@ class ParticipantDAOTest {
     void methodExceptionTests() {
         methodExceptionTests(() -> dao.getParticipantsOfChatById(null),
                 ParticipantDAO.ErrorKeys.ERROR_FIND_PARTICIPANTS_BY_CHAT_ID);
+        methodExceptionTests(() -> dao.getParticipantByUserId(null),
+                ParticipantDAO.ErrorKeys.ERROR_GET_PARTICIPANT_BY_USER_ID);
     }
 
     void methodExceptionTests(Executable fn, Enum<?> key) {

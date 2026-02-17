@@ -474,11 +474,19 @@ class ChatsRestControllerTest extends AbstractTest {
         chatDto.setType(ChatTypeDTO.HUMAN_DIRECT_CHAT);
 
         ParticipantDTO participantDto = new ParticipantDTO();
-        participantDto.setEmail("updated@email.com");
-        participantDto.setUserId("user1"); // This userId already exists in testdata
-        participantDto.setUserName("Updated User Name");
+        participantDto.setEmail("user1@example.com");
+        participantDto.setUserId("user1"); // This userId already exists in testdata and data is up 2 date
+        participantDto.setUserName("Human");
         participantDto.setType(ParticipantTypeDTO.HUMAN);
+
+        ParticipantDTO participant2Dto = new ParticipantDTO();
+        participant2Dto.setEmail("user2@example.com");
+        participant2Dto.setUserId("user2"); // This userId already exists in testdata and username is different
+        participant2Dto.setUserName("Human updated");
+        participant2Dto.setType(ParticipantTypeDTO.HUMAN);
+
         chatDto.addParticipantsItem(participantDto);
+        chatDto.addParticipantsItem(participant2Dto);
 
         // Create chat - should reuse existing participant with updated data
         var chat = given()
@@ -505,11 +513,14 @@ class ChatsRestControllerTest extends AbstractTest {
                 .body().as(ChatDTO.class);
 
         assertThat(chatResponseDto).isNotNull();
-        assertThat(chatResponseDto.getParticipants()).isNotNull().isNotEmpty().hasSize(1);
+        assertThat(chatResponseDto.getParticipants()).isNotNull().isNotEmpty().hasSize(2);
         assertThat(chatResponseDto.getParticipants().get(0).getUserId()).isEqualTo("user1");
-        // Participant should be updated with new data
-        assertThat(chatResponseDto.getParticipants().get(0).getEmail()).isEqualTo("updated@email.com");
-        assertThat(chatResponseDto.getParticipants().get(0).getUserName()).isEqualTo("Updated User Name");
+        assertThat(chatResponseDto.getParticipants().get(0).getEmail()).isEqualTo("user1@example.com");
+        assertThat(chatResponseDto.getParticipants().get(0).getUserName()).isEqualTo("Human");
+
+        assertThat(chatResponseDto.getParticipants().get(1).getUserId()).isEqualTo("user2");
+        assertThat(chatResponseDto.getParticipants().get(1).getEmail()).isEqualTo("user2@example.com");
+        assertThat(chatResponseDto.getParticipants().get(1).getUserName()).isEqualTo("Human updated");
     }
 
     @Test
