@@ -1,5 +1,7 @@
 package org.tkit.onecx.chat.rs.internal.services;
 
+import java.util.Optional;
+
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -82,8 +84,9 @@ public class ChatsService {
         var message = mapper.createMessage(createMessageDTO);
         message.setChat(chat);
         message = msgDao.create(message);
+        var skipAiProcessing = Optional.ofNullable(createMessageDTO.getSkipAIProcessing()).orElse(false);
 
-        if (Chat.ChatType.AI_CHAT.equals(chat.getType())) {
+        if (shouldForwardToAiService(chat.getType(), skipAiProcessing)) {
 
             Conversation conversation = mapper.mapChat2Conversation(chat);
             ChatMessage chatMessage = mapper.mapMessage(message);
@@ -113,5 +116,9 @@ public class ChatsService {
         participant = participantDao.update(participant);
         dao.update(chat);
         return participant;
+    }
+
+    private boolean shouldForwardToAiService(final Chat.ChatType chatType, final boolean skipProcessing) {
+        return chatType.equals(Chat.ChatType.AI_CHAT) && !skipProcessing;
     }
 }

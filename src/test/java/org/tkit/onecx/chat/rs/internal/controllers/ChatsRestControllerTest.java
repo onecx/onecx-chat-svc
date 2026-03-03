@@ -1102,4 +1102,109 @@ class ChatsRestControllerTest extends AbstractTest {
         assertThat(data).isNotNull();
     }
 
+    @Test
+    void createChatMessageWithDispatchApiVerificationTest() {
+        String responseFromMock = """
+                {
+                  "conversationId": "123456",
+                  "message": "AI generated response",
+                  "type": "ASSISTANT",
+                  "creationDate": 1643684377000
+                }
+                """;
+
+        mockServerClient.when(request()
+                .withPath("/v1/dispatch/chat")
+                .withMethod(HttpMethod.POST))
+                .withId(MOCK_ID)
+                .respond(httpRequest -> response().withStatusCode(200)
+                        .withHeaders(new Header(HttpHeaders.CONTENT_TYPE, APPLICATION_JSON))
+                        .withBody(responseFromMock));
+
+        var chatDto = new CreateChatDTO();
+        chatDto.setAppId("appId");
+        chatDto.setType(ChatTypeDTO.AI_CHAT);
+
+        var chat = given()
+                .auth().oauth2(getKeycloakClientToken("testClient"))
+                .when()
+                .contentType(APPLICATION_JSON)
+                .body(chatDto)
+                .post()
+                .then()
+                .statusCode(CREATED.getStatusCode())
+                .extract()
+                .body().as(ChatDTO.class);
+
+        Assertions.assertNotNull(chat);
+
+        var messageDto = new CreateMessageDTO();
+        messageDto.setType(MessageTypeDTO.HUMAN);
+        messageDto.setText("Test question for AI");
+        messageDto.setUserId("testUser");
+        messageDto.setSkipAIProcessing(false);
+
+        given()
+                .auth().oauth2(getKeycloakClientToken("testClient"))
+                .pathParam("chatId", chat.getId())
+                .when()
+                .contentType(APPLICATION_JSON)
+                .body(messageDto)
+                .post("{chatId}/messages")
+                .then()
+                .statusCode(CREATED.getStatusCode());
+
+        mockServerClient.verify(request()
+                .withPath("/v1/dispatch/chat")
+                .withMethod(HttpMethod.POST));
+    }
+
+    @Test
+    void createChatMessageShouldNotCallDispatchApiWhenSkipAIProcessingTest() {
+        mockServerClient.when(request()
+                .withPath("/v1/dispatch/chat")
+                .withMethod(HttpMethod.POST))
+                .withId(MOCK_ID)
+                .respond(httpRequest -> response().withStatusCode(200)
+                        .withHeaders(new Header(HttpHeaders.CONTENT_TYPE, APPLICATION_JSON))
+                        .withBody("{}"));
+
+        var chatDto = new CreateChatDTO();
+        chatDto.setAppId("appId");
+        chatDto.setType(ChatTypeDTO.AI_CHAT);
+
+        var chat = given()
+                .auth().oauth2(getKeycloakClientToken("testClient"))
+                .when()
+                .contentType(APPLICATION_JSON)
+                .body(chatDto)
+                .post()
+                .then()
+                .statusCode(CREATED.getStatusCode())
+                .extract()
+                .body().as(ChatDTO.class);
+
+        Assertions.assertNotNull(chat);
+
+        var messageDto = new CreateMessageDTO();
+        messageDto.setType(MessageTypeDTO.HUMAN);
+        messageDto.setText("Test question - no AI processing");
+        messageDto.setUserId("testUser");
+        messageDto.setSkipAIProcessing(true);
+
+        given()
+                .auth().oauth2(getKeycloakClientToken("testClient"))
+                .pathParam("chatId", chat.getId())
+                .when()
+                .contentType(APPLICATION_JSON)
+                .body(messageDto)
+                .post("{chatId}/messages")
+                .then()
+                .statusCode(CREATED.getStatusCode());
+
+        mockServerClient.verify(request()
+                .withPath("/v1/dispatch/chat")
+                .withMethod(HttpMethod.POST), org.mockserver.verify.VerificationTimes.exactly(0));
+    }
+
 }
