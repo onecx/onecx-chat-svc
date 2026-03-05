@@ -15,6 +15,8 @@ import jakarta.ws.rs.core.HttpHeaders;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockserver.client.MockServerClient;
 import org.mockserver.model.Header;
 import org.tkit.onecx.chat.test.AbstractTest;
@@ -1207,4 +1209,61 @@ class ChatsRestControllerTest extends AbstractTest {
                 .withMethod(HttpMethod.POST), org.mockserver.verify.VerificationTimes.exactly(0));
     }
 
+    @CsvSource({
+            "10000, 201",
+            "500, 201",
+            "10500, 500"
+    })
+    @ParameterizedTest
+    void storeMessageWithDifferentMessageLengthTest(int messageLength, int expectedStatus) {
+        var longAiResponse = "a".repeat(messageLength);
+        String responseFromMock = String.format("""
+                {
+                  "conversationId": "123456",
+                  "message": "%s",
+                  "type": "ASSISTANT",
+                  "creationDate": 1643684377000
+                }
+                """, longAiResponse);
+
+        mockServerClient.when(request()
+                .withPath("/v1/dispatch/chat")
+                .withMethod(HttpMethod.POST))
+                .withId(MOCK_ID)
+                .respond(httpRequest -> response().withStatusCode(200)
+                        .withHeaders(new Header(HttpHeaders.CONTENT_TYPE, APPLICATION_JSON))
+                        .withBody(responseFromMock));
+
+        var chatDto = new CreateChatDTO();
+        chatDto.setAppId("appId");
+        chatDto.setType(ChatTypeDTO.AI_CHAT);
+
+        var createdChat = given()
+                .auth().oauth2(getKeycloakClientToken("testClient"))
+                .when()
+                .contentType(APPLICATION_JSON)
+                .body(chatDto)
+                .post()
+                .then()
+                .statusCode(CREATED.getStatusCode())
+                .extract()
+                .body().as(ChatDTO.class);
+
+        Assertions.assertNotNull(createdChat);
+
+        var messageDto = new CreateMessageDTO();
+        messageDto.setType(MessageTypeDTO.HUMAN);
+        messageDto.setText("Test question - no AI processing");
+        messageDto.setUserId("testUser");
+
+        given()
+                .auth().oauth2(getKeycloakClientToken("testClient"))
+                .pathParam("chatId", createdChat.getId())
+                .when()
+                .contentType(APPLICATION_JSON)
+                .body(messageDto)
+                .post("{chatId}/messages")
+                .then()
+                .statusCode(expectedStatus);
+    }
 }
