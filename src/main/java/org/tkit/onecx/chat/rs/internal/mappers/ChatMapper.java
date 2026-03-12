@@ -48,7 +48,6 @@ public interface ChatMapper {
     @Mapping(target = "persisted", ignore = true)
     @Mapping(target = "tenantId", ignore = true)
     @Mapping(target = "messages", ignore = true)
-    @Mapping(target = "userId", ignore = true)
     @Mapping(target = "participants", ignore = true)
     Chat create(CreateChatDTO object);
 
