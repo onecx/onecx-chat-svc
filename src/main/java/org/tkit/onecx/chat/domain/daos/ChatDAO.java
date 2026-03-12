@@ -1,5 +1,8 @@
 package org.tkit.onecx.chat.domain.daos;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.persistence.EntityGraph;
 import jakarta.persistence.NoResultException;
@@ -47,18 +50,23 @@ public class ChatDAO extends AbstractDAO<Chat> {
             var cq = cb.createQuery(Chat.class);
             var root = cq.from(Chat.class);
 
+            List<Predicate> predicates = new ArrayList<>();
+
             if (criteria.getTopic() != null && !criteria.getTopic().isBlank()) {
-                cq.where(cb.like(root.get(Chat_.topic), QueryCriteriaUtil.wildcard(criteria.getTopic())));
+                predicates.add(cb.like(root.get(Chat_.topic), QueryCriteriaUtil.wildcard(criteria.getTopic())));
             }
 
             if (criteria.getType() != null) {
-                cq.where(cb.equal(root.get(Chat_.type), criteria.getType()));
+                predicates.add(cb.equal(root.get(Chat_.type), criteria.getType()));
             }
 
             if (criteria.getParticipant() != null) {
                 Join<Chat, Participant> participantsJoin = root.join("participants");
-                Predicate predicate = cb.equal(participantsJoin.get("userId"), criteria.getParticipant());
-                cq.where(predicate);
+                predicates.add(cb.equal(participantsJoin.get("userId"), criteria.getParticipant()));
+            }
+
+            if (!predicates.isEmpty()) {
+                cq.where(cb.and(predicates.toArray(new Predicate[0])));
             }
 
             return createPageQuery(cq, Page.of(criteria.getPageNumber(), criteria.getPageSize())).getPageResult();
