@@ -54,7 +54,7 @@ public class ChatDAO extends AbstractDAO<Chat> {
 
             if (criteria.getTopic() != null && !criteria.getTopic().isBlank()) {
                 predicates.add(cb.like(cb.lower(root.get(Chat_.topic)),
-                        QueryCriteriaUtil.wildcard(criteria.getTopic().toLowerCase())));
+                        QueryCriteriaUtil.wildcard(criteria.getTopic())));
             }
 
             if (criteria.getType() != null) {
