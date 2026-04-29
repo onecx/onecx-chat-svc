@@ -583,6 +583,9 @@ components:
           $ref: '#/components/schemas/RequestContext'
         skipAIProcessing:
           type: boolean
+        awaitResponse:
+          type: boolean
+          default: true
     RequestContext:
       type: object
       properties:
