@@ -1,6 +1,7 @@
 package org.tkit.onecx.chat.rs.internal.services;
 
-import java.util.concurrent.CompletableFuture;
+import java.util.ArrayList;
+import java.util.List;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -22,9 +23,13 @@ import gen.io.github.onecx.ai.clients.model.ChatMessage;
 import gen.io.github.onecx.ai.clients.model.ChatRequest;
 import gen.io.github.onecx.ai.clients.model.Conversation;
 import gen.io.github.onecx.notification.clients.api.NotificationV1Api;
+import gen.io.github.onecx.notification.clients.model.ContentMeta;
+import gen.io.github.onecx.notification.clients.model.Issuer;
+import gen.io.github.onecx.notification.clients.model.Notification;
+import gen.io.github.onecx.notification.clients.model.Severity;
 import gen.org.tkit.onecx.chat.rs.internal.model.*;
-import io.quarkus.arc.Arc;
 import io.quarkus.narayana.jta.QuarkusTransaction;
+import io.smallrye.mutiny.Uni;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -100,29 +105,25 @@ public class ChatsService {
             } else {
                 var chatId = chat.getId();
                 var messageId = message.getId();
-                CompletableFuture.runAsync(() -> {
-                    var requestContext = Arc.container().requestContext();
-                    try {
-                        requestContext.activate();
-                        QuarkusTransaction.requiringNew().run(() -> {
-                            var managedChat = dao.findById(chatId);
-                            var managedMessage = msgDao.findById(messageId);
-                            if (managedChat == null || managedMessage == null) {
-                                log.warn(
-                                        "Skipping async AI processing because chat or message was not found. chatId={}, messageId={}",
-                                        chatId, messageId);
-                                return;
-                            }
-                            forwardToAiAndStore(managedChat, managedMessage);
-                            notifyAsyncAiResponseReady(managedChat, managedMessage);
-                        });
-                    } catch (Exception ex) {
-                        log.error("Async AI response processing failed for chatId={}, messageId={}", chatId, messageId,
-                                ex);
-                    } finally {
-                        requestContext.terminate();
-                    }
-                });
+                Uni.createFrom().voidItem()
+                        .chain(() -> Uni.createFrom().voidItem()
+                                .runSubscriptionOn(r -> QuarkusTransaction.requiringNew()
+                                        .run(() -> {
+                                            var managedChat = dao.findById(chatId);
+                                            var managedMessage = msgDao.findById(messageId);
+                                            if (managedChat == null || managedMessage == null) {
+                                                log.warn(
+                                                        "Skipping async AI processing because chat or message was not found. chatId={}, messageId={}",
+                                                        chatId, messageId);
+                                                return;
+                                            }
+                                            forwardToAiAndStore(managedChat, managedMessage);
+                                            notifyAsyncAiResponseReady(managedChat, managedMessage);
+                                        })))
+                        .subscribe()
+                        .with(item -> log.debug("Async AI processing completed for chatId={}", chatId),
+                                ex -> log.error("Async AI response processing failed for chatId={}, messageId={}",
+                                        chatId, messageId, ex));
             }
         }
         return message;
@@ -145,8 +146,23 @@ public class ChatsService {
     }
 
     private void notifyAsyncAiResponseReady(Chat chat, Message message) {
-        // Placeholder notification path. Replace with notificationClient call when contract is finalized.
-        log.info("Async AI response ready notification placeholder chatId={}, messageId={}", chat.getId(), message.getId());
+        List<ContentMeta> contentMetaList = new ArrayList<>();
+        contentMetaList.add(new ContentMeta().key("chatId").value(chat.getId()));
+        contentMetaList.add(new ContentMeta().key("type").value("update_chat"));
+        for (Participant participant : chat.getParticipants()) {
+            if (message.getUserId().equals(participant.getUserId())) {
+                continue; // Skip notifying the sender of the message
+            }
+            var notification = new Notification()
+                    .issuer(Issuer.USER)
+                    .applicationId("onecx-chat")
+                    .senderId(message.getUserId())
+                    .receiverId(participant.getUserId())
+                    .persist(false)
+                    .severity(Severity.NORMAL)
+                    .contentMeta(contentMetaList);
+            notificationClient.dispatchNotification(notification);
+        }
     }
 
     @Transactional
