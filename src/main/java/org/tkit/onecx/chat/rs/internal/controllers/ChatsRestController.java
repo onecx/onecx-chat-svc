@@ -118,7 +118,7 @@ public class ChatsRestController implements ChatsInternalApi {
         }
 
         Message message = service.createChatMessage(chat, createMessageDTO);
-        boolean awaitResponse = Boolean.TRUE.equals(createMessageDTO.getAwaitResponse());
+        boolean awaitResponse = !Boolean.FALSE.equals(createMessageDTO.getAwaitResponse());
         var location = uriInfo.getAbsolutePathBuilder().path(message.getId()).build();
 
         if (!awaitResponse) {
