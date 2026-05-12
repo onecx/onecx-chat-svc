@@ -42,11 +42,17 @@ class ChatsRestControllerTest extends AbstractTest {
     public MockServerClient mockServerClient;
 
     static final String MOCK_ID = "MOCK";
+    static final String MOCK_NOTIFICATION_ID = "MOCK_NOTIFICATION";
 
     @BeforeEach
     void resetExpectation() {
         try {
             mockServerClient.clear(MOCK_ID);
+        } catch (Exception ex) {
+            //  mockId not existing
+        }
+        try {
+            mockServerClient.clear(MOCK_NOTIFICATION_ID);
         } catch (Exception ex) {
             //  mockId not existing
         }
@@ -1312,6 +1318,107 @@ class ChatsRestControllerTest extends AbstractTest {
                 .withMethod(HttpMethod.POST), org.mockserver.verify.VerificationTimes.exactly(0));
     }
 
+    @Test
+    void createChatMessageShouldDispatchAiAndNotificationAsyncWhenAwaitResponseFalseTest() {
+        String responseFromMock = """
+                {
+                  "conversationId": "123456",
+                  "message": "AI generated response",
+                  "type": "ASSISTANT",
+                  "creationDate": 1643684377000
+                }
+                """;
+
+        mockServerClient.when(request()
+                .withPath("/v1/dispatch/chat")
+                .withMethod(HttpMethod.POST))
+                .withId(MOCK_ID)
+                .respond(httpRequest -> response().withStatusCode(200)
+                        .withHeaders(new Header(HttpHeaders.CONTENT_TYPE, APPLICATION_JSON))
+                        .withBody(responseFromMock));
+
+        mockServerClient.when(request()
+                .withPath("/v1/notifications/dispatch")
+                .withMethod(HttpMethod.POST))
+                .withId(MOCK_NOTIFICATION_ID)
+                .respond(httpRequest -> response().withStatusCode(200)
+                        .withHeaders(new Header(HttpHeaders.CONTENT_TYPE, APPLICATION_JSON))
+                        .withBody("{}"));
+
+        var chatDto = new CreateChatDTO();
+        chatDto.setAppId("appId");
+        chatDto.setType(ChatTypeDTO.AI_CHAT);
+
+        ParticipantDTO senderParticipant = new ParticipantDTO();
+        senderParticipant.setEmail("sender@email.com");
+        senderParticipant.setUserId("senderUser");
+        senderParticipant.setUserName("sender");
+        senderParticipant.setType(ParticipantTypeDTO.HUMAN);
+
+        ParticipantDTO receiverParticipant = new ParticipantDTO();
+        receiverParticipant.setEmail("receiver@email.com");
+        receiverParticipant.setUserId("receiverUser");
+        receiverParticipant.setUserName("receiver");
+        receiverParticipant.setType(ParticipantTypeDTO.HUMAN);
+
+        chatDto.addParticipantsItem(senderParticipant);
+        chatDto.addParticipantsItem(receiverParticipant);
+
+        var chat = given()
+                .auth().oauth2(getKeycloakClientToken("testClient"))
+                .when()
+                .contentType(APPLICATION_JSON)
+                .body(chatDto)
+                .post()
+                .then()
+                .statusCode(CREATED.getStatusCode())
+                .extract()
+                .body().as(ChatDTO.class);
+
+        Assertions.assertNotNull(chat);
+
+        var messageDto = new CreateMessageDTO();
+        messageDto.setType(MessageTypeDTO.HUMAN);
+        messageDto.setText("Test question async AI and notification");
+        messageDto.setUserId("senderUser");
+        messageDto.setSkipAIProcessing(false);
+        messageDto.setAwaitResponse(false);
+
+        given()
+                .auth().oauth2(getKeycloakClientToken("testClient"))
+                .pathParam("chatId", chat.getId())
+                .when()
+                .contentType(APPLICATION_JSON)
+                .body(messageDto)
+                .post("{chatId}/messages")
+                .then()
+                .statusCode(ACCEPTED.getStatusCode());
+
+        assertEventually(() -> {
+            var messages = given()
+                    .auth().oauth2(getKeycloakClientToken("testClient"))
+                    .contentType(APPLICATION_JSON)
+                    .pathParam("chatId", chat.getId())
+                    .get("{chatId}/messages")
+                    .then()
+                    .statusCode(OK.getStatusCode())
+                    .extract().as(new TypeRef<List<MessageDTO>>() {
+                    });
+
+            assertThat(messages).isNotNull().hasSize(2);
+            assertThat(messages.get(0).getType()).isEqualTo(MessageTypeDTO.HUMAN);
+            assertThat(messages.get(1).getType()).isEqualTo(MessageTypeDTO.ASSISTANT);
+        });
+
+        assertEventually(() -> mockServerClient.verify(request()
+                .withPath("/v1/dispatch/chat")
+                .withMethod(HttpMethod.POST), org.mockserver.verify.VerificationTimes.atLeast(1)));
+
+        assertEventually(() -> mockServerClient.verify(request()
+                .withPath("/v1/notifications/dispatch")
+                .withMethod(HttpMethod.POST), org.mockserver.verify.VerificationTimes.exactly(1)));
+    }
+
     @CsvSource({
             "10000, 201",
             "500, 201",
@@ -1368,5 +1475,29 @@ class ChatsRestControllerTest extends AbstractTest {
                 .post("{chatId}/messages")
                 .then()
                 .statusCode(expectedStatus);
+    }
+
+    private void assertEventually(Runnable assertion) {
+        long deadline = System.currentTimeMillis() + 20000;
+        AssertionError lastAssertionError = null;
+        while (System.currentTimeMillis() < deadline) {
+            try {
+                assertion.run();
+                return;
+            } catch (AssertionError ex) {
+                lastAssertionError = ex;
+                try {
+                    Thread.sleep(100);
+                } catch (InterruptedException interruptedException) {
+                    Thread.currentThread().interrupt();
+                    throw new AssertionError("Interrupted while waiting for async assertion", interruptedException);
+                }
+            }
+        }
+
+        if (lastAssertionError != null) {
+            throw lastAssertionError;
+        }
+        throw new AssertionError("Async assertion did not pass in time");
     }
 }

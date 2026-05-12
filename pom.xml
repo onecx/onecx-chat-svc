@@ -204,6 +204,7 @@
                 <executions>
                     <execution>
                         <id>internal</id>
+                        <phase>generate-sources</phase>
                         <goals>
                             <goal>generate</goal>
                         </goals>
@@ -222,7 +223,7 @@
                 <executions>
                     <execution>
                         <id>onecx-ai-svc</id>
-                        <phase>generate-resources</phase>
+                        <phase>initialize</phase>
                         <goals>
                             <goal>wget</goal>
                         </goals>
@@ -235,15 +236,9 @@
                             <skipCache>true</skipCache>
                         </configuration>
                     </execution>
-                </executions>
-            </plugin>
-            <plugin>
-                <groupId>com.googlecode.maven-download-plugin</groupId>
-                <artifactId>download-maven-plugin</artifactId>
-                <executions>
                     <execution>
                         <id>onecx-notification-svc</id>
-                        <phase>generate-resources</phase>
+                        <phase>initialize</phase>
                         <goals>
                             <goal>wget</goal>
                         </goals>

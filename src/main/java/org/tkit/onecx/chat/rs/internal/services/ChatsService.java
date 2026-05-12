@@ -2,12 +2,14 @@ package org.tkit.onecx.chat.rs.internal.services;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.core.Response;
 
+import org.eclipse.microprofile.context.ManagedExecutor;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
 import org.tkit.onecx.chat.domain.daos.ChatDAO;
 import org.tkit.onecx.chat.domain.daos.MessageDAO;
@@ -29,7 +31,6 @@ import gen.io.github.onecx.notification.clients.model.Notification;
 import gen.io.github.onecx.notification.clients.model.Severity;
 import gen.org.tkit.onecx.chat.rs.internal.model.*;
 import io.quarkus.narayana.jta.QuarkusTransaction;
-import io.smallrye.mutiny.Uni;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -62,6 +63,9 @@ public class ChatsService {
 
     @Inject
     ParticipantService participantService;
+
+    @Inject
+    ManagedExecutor managedExecutor;
 
     @Transactional
     public Chat createChat(CreateChatDTO createChatDTO) {
@@ -96,37 +100,41 @@ public class ChatsService {
         var message = mapper.createMessage(createMessageDTO);
         message.setChat(chat);
         message = msgDao.create(message);
-        boolean skipAiProcessing = Boolean.TRUE.equals(createMessageDTO.getSkipAIProcessing());
-        boolean awaitResponse = !Boolean.FALSE.equals(createMessageDTO.getAwaitResponse());
+        var skipAiProcessing = Optional.ofNullable(createMessageDTO.getSkipAIProcessing()).orElse(false);
+        var awaitResponse = !Boolean.FALSE.equals(createMessageDTO.getAwaitResponse());
 
         if (shouldForwardToAiService(chat.getType(), skipAiProcessing)) {
             if (awaitResponse) {
                 forwardToAiAndStore(chat, message);
             } else {
-                var chatId = chat.getId();
-                var messageId = message.getId();
-                Uni.createFrom().voidItem()
-                        .chain(() -> Uni.createFrom().voidItem()
-                                .runSubscriptionOn(r -> QuarkusTransaction.requiringNew()
-                                        .run(() -> {
-                                            var managedChat = dao.findById(chatId);
-                                            var managedMessage = msgDao.findById(messageId);
-                                            if (managedChat == null || managedMessage == null) {
-                                                log.warn(
-                                                        "Skipping async AI processing because chat or message was not found. chatId={}, messageId={}",
-                                                        chatId, messageId);
-                                                return;
-                                            }
-                                            forwardToAiAndStore(managedChat, managedMessage);
-                                            notifyAsyncAiResponseReady(managedChat, managedMessage);
-                                        })))
-                        .subscribe()
-                        .with(item -> log.debug("Async AI processing completed for chatId={}", chatId),
-                                ex -> log.error("Async AI response processing failed for chatId={}, messageId={}",
-                                        chatId, messageId, ex));
+                spawnAsyncAiProcessing(chat.getId(), message.getId());
             }
         }
         return message;
+    }
+
+    private void spawnAsyncAiProcessing(String chatId, String messageId) {
+        managedExecutor.runAsync(() -> {
+            try {
+                QuarkusTransaction.requiringNew().run(() -> {
+                    var chat = dao.findById(chatId);
+                    var message = msgDao.findById(messageId);
+
+                    if (chat == null || message == null) {
+                        log.warn(
+                                "Skipping async AI processing because chat or message was not found. chatId={}, messageId={}",
+                                chatId, messageId);
+                        return;
+                    }
+
+                    forwardToAiAndStore(chat, message);
+                    notifyAsyncAiResponseReady(chat, message);
+                });
+                log.debug("Async AI processing completed for chatId={}", chatId);
+            } catch (Exception ex) {
+                log.error("Async AI response processing failed for chatId={}, messageId={}", chatId, messageId, ex);
+            }
+        });
     }
 
     private void forwardToAiAndStore(Chat chat, Message message) {
@@ -161,7 +169,8 @@ public class ChatsService {
                     .persist(false)
                     .severity(Severity.NORMAL)
                     .contentMeta(contentMetaList);
-            notificationClient.dispatchNotification(notification);
+
+            notificationClient.sendNotification(notification);
         }
     }
 
