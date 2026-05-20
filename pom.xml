@@ -205,7 +205,6 @@
                 <executions>
                     <execution>
                         <id>internal</id>
-                        <phase>generate-sources</phase>
                         <goals>
                             <goal>generate</goal>
                         </goals>
@@ -224,7 +223,7 @@
                 <executions>
                     <execution>
                         <id>onecx-ai-svc</id>
-                        <phase>initialize</phase>
+                        <phase>generate-resources</phase>
                         <goals>
                             <goal>wget</goal>
                         </goals>
@@ -239,7 +238,7 @@
                     </execution>
                     <execution>
                         <id>onecx-notification-svc</id>
-                        <phase>initialize</phase>
+                        <phase>generate-resources</phase>
                         <goals>
                             <goal>wget</goal>
                         </goals>

@@ -18,11 +18,14 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.mockserver.client.MockServerClient;
+import org.mockserver.matchers.MatchType;
 import org.mockserver.model.Header;
+import org.mockserver.model.JsonBody;
 import org.tkit.onecx.chat.test.AbstractTest;
 import org.tkit.quarkus.security.test.GenerateKeycloakClient;
 import org.tkit.quarkus.test.WithDBData;
 
+import gen.io.github.onecx.ai.clients.model.ChatMessage;
 import gen.org.tkit.onecx.chat.rs.internal.model.*;
 import io.quarkiverse.mockserver.test.InjectMockServerClient;
 import io.quarkiverse.mockserver.test.MockServerTestResource;
@@ -48,12 +51,8 @@ class ChatsRestControllerTest extends AbstractTest {
     void resetExpectation() {
         try {
             mockServerClient.clear(MOCK_ID);
-        } catch (Exception ex) {
-            //  mockId not existing
-        }
-        try {
             mockServerClient.clear(MOCK_NOTIFICATION_ID);
-        } catch (Exception ex) {
+        } catch (Exception _) {
             //  mockId not existing
         }
     }
@@ -376,7 +375,6 @@ class ChatsRestControllerTest extends AbstractTest {
         assertThat(chatResponseDto.getParticipants()).isNotNull().isNotEmpty().hasSize(1);
         assertThat(chatResponseDto.getParticipants().get(0).getUserId()).isEqualTo("jdoe");
         assertThat(chatResponseDto.getParticipants().get(0).getEmail()).isEqualTo("example@email.com");
-
         // create message
         var messageDto = new CreateMessageDTO();
         messageDto.setType(MessageTypeDTO.HUMAN);
@@ -1230,9 +1228,17 @@ class ChatsRestControllerTest extends AbstractTest {
                 .withPath("/v1/dispatch/chat")
                 .withMethod(HttpMethod.POST))
                 .withId(MOCK_ID)
-                .respond(httpRequest -> response().withStatusCode(200)
-                        .withHeaders(new Header(HttpHeaders.CONTENT_TYPE, APPLICATION_JSON))
-                        .withBody(responseFromMock));
+                .respond(httpRequest -> {
+                    // Delay dispatch response to prove API returns before AI processing finishes.
+                    try {
+                        Thread.sleep(1500);
+                    } catch (InterruptedException ex) {
+                        Thread.currentThread().interrupt();
+                    }
+                    return response().withStatusCode(200)
+                            .withHeaders(new Header(HttpHeaders.CONTENT_TYPE, APPLICATION_JSON))
+                            .withBody(responseFromMock);
+                });
 
         var chatDto = new CreateChatDTO();
         chatDto.setAppId("appId");
@@ -1258,6 +1264,7 @@ class ChatsRestControllerTest extends AbstractTest {
         messageDto.setSkipAIProcessing(false);
         messageDto.setAwaitResponse(false);
 
+        long startedAt = System.currentTimeMillis();
         given()
                 .auth().oauth2(getKeycloakClientToken("testClient"))
                 .pathParam("chatId", chat.getId())
@@ -1267,6 +1274,40 @@ class ChatsRestControllerTest extends AbstractTest {
                 .post("{chatId}/messages")
                 .then()
                 .statusCode(ACCEPTED.getStatusCode());
+
+        long elapsedMs = System.currentTimeMillis() - startedAt;
+        assertThat(elapsedMs).isLessThan(1200L);
+
+        var immediateMessages = given()
+                .auth().oauth2(getKeycloakClientToken("testClient"))
+                .contentType(APPLICATION_JSON)
+                .pathParam("chatId", chat.getId())
+                .get("{chatId}/messages")
+                .then()
+                .statusCode(OK.getStatusCode())
+                .extract().as(new TypeRef<List<MessageDTO>>() {
+                });
+
+        assertThat(immediateMessages).isNotNull().hasSize(1);
+        assertThat(immediateMessages.get(0).getType()).isEqualTo(MessageTypeDTO.HUMAN);
+
+        assertEventually(() -> {
+            var eventualMessages = given()
+                    .auth().oauth2(getKeycloakClientToken("testClient"))
+                    .contentType(APPLICATION_JSON)
+                    .pathParam("chatId", chat.getId())
+                    .get("{chatId}/messages")
+                    .then()
+                    .statusCode(OK.getStatusCode())
+                    .extract().as(new TypeRef<List<MessageDTO>>() {
+                    });
+
+            assertThat(eventualMessages).isNotNull().hasSize(2);
+            assertThat(eventualMessages.get(1).getType()).isEqualTo(MessageTypeDTO.ASSISTANT);
+        });
+
+        assertEventually(() -> mockServerClient.verify(dispatchRequestForChatId(chat.getId()),
+                org.mockserver.verify.VerificationTimes.atLeast(1)));
     }
 
     @Test
@@ -1313,37 +1354,37 @@ class ChatsRestControllerTest extends AbstractTest {
                 .then()
                 .statusCode(ACCEPTED.getStatusCode());
 
-        mockServerClient.verify(request()
-                .withPath("/v1/dispatch/chat")
-                .withMethod(HttpMethod.POST), org.mockserver.verify.VerificationTimes.exactly(0));
+        try {
+            Thread.sleep(400);
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw new AssertionError("Interrupted while waiting to confirm skip-ai behavior", ex);
+        }
+
+        mockServerClient.verify(dispatchRequestForChatId(chat.getId()),
+                org.mockserver.verify.VerificationTimes.exactly(0));
     }
 
     @Test
     void createChatMessageShouldDispatchAiAndNotificationAsyncWhenAwaitResponseFalseTest() {
-        String responseFromMock = """
-                {
-                  "conversationId": "123456",
-                  "message": "AI generated response",
-                  "type": "ASSISTANT",
-                  "creationDate": 1643684377000
-                }
-                """;
-
+        ChatMessage chatMessageResponse = new ChatMessage();
+        chatMessageResponse.setConversationId("123456");
+        chatMessageResponse.setMessage("AI generated response");
+        chatMessageResponse.setType(ChatMessage.TypeEnum.ASSISTANT);
+        chatMessageResponse.setCreationDate(1643684377L);
         mockServerClient.when(request()
                 .withPath("/v1/dispatch/chat")
                 .withMethod(HttpMethod.POST))
                 .withId(MOCK_ID)
-                .respond(httpRequest -> response().withStatusCode(200)
+                .respond(response().withStatusCode(200)
                         .withHeaders(new Header(HttpHeaders.CONTENT_TYPE, APPLICATION_JSON))
-                        .withBody(responseFromMock));
+                        .withBody(JsonBody.json(chatMessageResponse)));
 
         mockServerClient.when(request()
                 .withPath("/v1/notifications/dispatch")
                 .withMethod(HttpMethod.POST))
                 .withId(MOCK_NOTIFICATION_ID)
-                .respond(httpRequest -> response().withStatusCode(200)
-                        .withHeaders(new Header(HttpHeaders.CONTENT_TYPE, APPLICATION_JSON))
-                        .withBody("{}"));
+                .respond(response().withStatusCode(200));
 
         var chatDto = new CreateChatDTO();
         chatDto.setAppId("appId");
@@ -1394,6 +1435,17 @@ class ChatsRestControllerTest extends AbstractTest {
                 .then()
                 .statusCode(ACCEPTED.getStatusCode());
 
+        var immediateMessages = given()
+                .auth().oauth2(getKeycloakClientToken("testClient"))
+                .contentType(APPLICATION_JSON)
+                .pathParam("chatId", chat.getId())
+                .get("{chatId}/messages")
+                .then()
+                .statusCode(OK.getStatusCode())
+                .extract().as(new TypeRef<List<MessageDTO>>() {
+                });
+        assertThat(immediateMessages).isNotNull().hasSize(1);
+
         assertEventually(() -> {
             var messages = given()
                     .auth().oauth2(getKeycloakClientToken("testClient"))
@@ -1410,13 +1462,12 @@ class ChatsRestControllerTest extends AbstractTest {
             assertThat(messages.get(1).getType()).isEqualTo(MessageTypeDTO.ASSISTANT);
         });
 
-        assertEventually(() -> mockServerClient.verify(request()
-                .withPath("/v1/dispatch/chat")
-                .withMethod(HttpMethod.POST), org.mockserver.verify.VerificationTimes.atLeast(1)));
+        assertEventually(() -> mockServerClient.verify(dispatchRequestForChatId(chat.getId()),
+                org.mockserver.verify.VerificationTimes.atLeast(1)));
 
-        assertEventually(() -> mockServerClient.verify(request()
-                .withPath("/v1/notifications/dispatch")
-                .withMethod(HttpMethod.POST), org.mockserver.verify.VerificationTimes.exactly(1)));
+        assertEventually(() -> mockServerClient.verify(notificationRequestForChatAndReceiver(chat.getId(), "receiverUser"),
+                org.mockserver.verify.VerificationTimes.exactly(1)));
+
     }
 
     @CsvSource({
@@ -1499,5 +1550,35 @@ class ChatsRestControllerTest extends AbstractTest {
             throw lastAssertionError;
         }
         throw new AssertionError("Async assertion did not pass in time");
+    }
+
+    private org.mockserver.model.HttpRequest dispatchRequestForChatId(String chatId) {
+        return request()
+                .withPath("/v1/dispatch/chat")
+                .withMethod(HttpMethod.POST)
+                .withBody(JsonBody.json("""
+                        {
+                          "conversation": {
+                            "conversationId": "%s"
+                          }
+                        }
+                        """.formatted(chatId), MatchType.ONLY_MATCHING_FIELDS));
+    }
+
+    private org.mockserver.model.HttpRequest notificationRequestForChatAndReceiver(String chatId, String receiverId) {
+        return request()
+                .withPath("/v1/notifications/dispatch")
+                .withMethod(HttpMethod.POST)
+                .withBody(JsonBody.json("""
+                        {
+                          "receiverId": "%s",
+                          "contentMeta": [
+                            {
+                              "key": "chatId",
+                              "value": "%s"
+                            }
+                          ]
+                        }
+                        """.formatted(receiverId, chatId), MatchType.ONLY_MATCHING_FIELDS));
     }
 }

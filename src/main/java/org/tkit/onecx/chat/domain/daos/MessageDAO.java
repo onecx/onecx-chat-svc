@@ -20,7 +20,7 @@ import org.tkit.quarkus.jpa.models.AbstractTraceableEntity_;
 import org.tkit.quarkus.jpa.models.TraceableEntity_;
 
 @ApplicationScoped
-@Transactional(Transactional.TxType.NOT_SUPPORTED)
+@Transactional(Transactional.TxType.SUPPORTS)
 public class MessageDAO extends AbstractDAO<Message> {
 
     public PageResult<Message> findChatMessagesByCriteria(ChatMessageSearchCriteria criteria) {
