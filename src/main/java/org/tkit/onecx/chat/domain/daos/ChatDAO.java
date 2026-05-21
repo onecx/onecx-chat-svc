@@ -22,7 +22,7 @@ import org.tkit.quarkus.jpa.models.TraceableEntity_;
 import org.tkit.quarkus.jpa.utils.QueryCriteriaUtil;
 
 @ApplicationScoped
-@Transactional(Transactional.TxType.NOT_SUPPORTED)
+@Transactional(Transactional.TxType.SUPPORTS)
 public class ChatDAO extends AbstractDAO<Chat> {
 
     // https://hibernate.atlassian.net/browse/HHH-16830#icft=HHH-16830

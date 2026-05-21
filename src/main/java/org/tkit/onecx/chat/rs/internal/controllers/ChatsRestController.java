@@ -26,7 +26,6 @@ import org.tkit.onecx.chat.domain.models.Participant;
 import org.tkit.onecx.chat.rs.internal.mappers.ChatMapper;
 import org.tkit.onecx.chat.rs.internal.mappers.ExceptionMapper;
 import org.tkit.onecx.chat.rs.internal.services.ChatsService;
-import org.tkit.quarkus.jpa.exceptions.ConstraintException;
 
 import gen.org.tkit.onecx.chat.rs.internal.ChatsInternalApi;
 import gen.org.tkit.onecx.chat.rs.internal.model.*;
@@ -118,9 +117,17 @@ public class ChatsRestController implements ChatsInternalApi {
         }
 
         Message message = service.createChatMessage(chat, createMessageDTO);
+        boolean awaitResponse = !Boolean.FALSE.equals(createMessageDTO.getAwaitResponse());
+        var location = uriInfo.getAbsolutePathBuilder().path(message.getId()).build();
+
+        if (!awaitResponse) {
+            return Response.accepted()
+                    .location(location)
+                    .build();
+        }
 
         return Response
-                .created(uriInfo.getAbsolutePathBuilder().path(message.getId()).build())
+                .created(location)
                 .build();
 
     }
@@ -180,11 +187,6 @@ public class ChatsRestController implements ChatsInternalApi {
         List<Participant> participantList = new ArrayList<>(participants);
         return Response.ok(mapper.mapParticipantList(participantList)).build();
 
-    }
-
-    @ServerExceptionMapper
-    public RestResponse<ProblemDetailResponseDTO> exception(ConstraintException ex) {
-        return exceptionMapper.exception(ex);
     }
 
     @ServerExceptionMapper

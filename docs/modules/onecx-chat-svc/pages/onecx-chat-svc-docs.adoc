@@ -30,12 +30,19 @@ quarkus.openapi-generator.codegen.spec.onecx_ai_svc_openapi_yaml.return-response
 quarkus.openapi-generator.codegen.spec.onecx_ai_svc_openapi_yaml.additional-api-type-annotations=@org.eclipse.microprofile.rest.client.annotation.RegisterClientHeaders;
 quarkus.openapi-generator.codegen.spec.onecx_ai_svc_openapi_yaml.additional-model-type-annotations=@io.quarkus.runtime.annotations.RegisterForReflection;
 quarkus.openapi-generator.codegen.spec.onecx_ai_svc_openapi_yaml.enable-security-generation=false
+quarkus.openapi-generator.codegen.spec.onecx_notification_svc_openapi_yaml.config-key=onecx_notification_svc
+quarkus.openapi-generator.codegen.spec.onecx_notification_svc_openapi_yaml.base-package=gen.io.github.onecx.notification.clients
+quarkus.openapi-generator.codegen.spec.onecx_notification_svc_openapi_yaml.return-response=true
+quarkus.openapi-generator.codegen.spec.onecx_notification_svc_openapi_yaml.additional-api-type-annotations=@org.eclipse.microprofile.rest.client.annotation.RegisterClientHeaders;
+quarkus.openapi-generator.codegen.spec.onecx_notification_svc_openapi_yaml.additional-model-type-annotations=@io.quarkus.runtime.annotations.RegisterForReflection;
+quarkus.openapi-generator.codegen.spec.onecx_notification_svc_openapi_yaml.enable-security-generation=false
 %prod.quarkus.oidc-client.client-id=${quarkus.application.name}
 %prod.quarkus.rest-client.onecx_ai_svc.providers=io.quarkus.oidc.client.reactive.filter.OidcClientRequestReactiveFilter
 %prod.quarkus.datasource.jdbc.url=${DB_URL:jdbc:postgresql://postgresdb:5432/onecx-chat?sslmode=disable}
 %prod.quarkus.datasource.username=${DB_USER:onecx-chat}
 %prod.quarkus.datasource.password=${DB_PWD:onecx-chat}
 %prod.quarkus.rest-client.onecx_ai_svc.url=http://onecx-ai-provider-svc:8080
+%prod.quarkus.rest-client.onecx_notification_svc.url=http://onecx-notification-svc:8080
 ----
 ====
 
@@ -66,5 +73,5 @@ app:
         enabled: true
         spec:
           kcConfig:
-            defaultClientScopes: [ ocx-tn:read, ocx-ai:read ]
+            defaultClientScopes: [ ocx-tn:read, ocx-ai:read, ocx-no:write ]
 ----

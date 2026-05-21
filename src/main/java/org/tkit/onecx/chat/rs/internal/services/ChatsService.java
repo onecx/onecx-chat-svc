@@ -5,9 +5,8 @@ import java.util.Optional;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
-import jakarta.ws.rs.core.Response;
 
-import org.eclipse.microprofile.rest.client.inject.RestClient;
+import org.eclipse.microprofile.context.ManagedExecutor;
 import org.tkit.onecx.chat.domain.daos.ChatDAO;
 import org.tkit.onecx.chat.domain.daos.MessageDAO;
 import org.tkit.onecx.chat.domain.daos.ParticipantDAO;
@@ -17,10 +16,6 @@ import org.tkit.onecx.chat.domain.models.Participant;
 import org.tkit.onecx.chat.rs.internal.mappers.ChatMapper;
 import org.tkit.onecx.chat.rs.internal.mappers.ExceptionMapper;
 
-import gen.io.github.onecx.ai.clients.api.DispatchApi;
-import gen.io.github.onecx.ai.clients.model.ChatMessage;
-import gen.io.github.onecx.ai.clients.model.ChatRequest;
-import gen.io.github.onecx.ai.clients.model.Conversation;
 import gen.org.tkit.onecx.chat.rs.internal.model.*;
 import lombok.extern.slf4j.Slf4j;
 
@@ -28,10 +23,6 @@ import lombok.extern.slf4j.Slf4j;
 @Transactional(Transactional.TxType.NOT_SUPPORTED)
 @ApplicationScoped
 public class ChatsService {
-
-    @Inject
-    @RestClient
-    DispatchApi dispatchClient;
 
     @Inject
     ChatDAO dao;
@@ -50,6 +41,12 @@ public class ChatsService {
 
     @Inject
     ParticipantService participantService;
+
+    @Inject
+    ManagedExecutor managedExecutor;
+
+    @Inject
+    AsyncAiProcessingService asyncAiProcessingService;
 
     @Transactional
     public Chat createChat(CreateChatDTO createChatDTO) {
@@ -85,24 +82,27 @@ public class ChatsService {
         message.setChat(chat);
         message = msgDao.create(message);
         var skipAiProcessing = Optional.ofNullable(createMessageDTO.getSkipAIProcessing()).orElse(false);
+        var awaitResponse = !Boolean.FALSE.equals(createMessageDTO.getAwaitResponse());
 
         if (shouldForwardToAiService(chat.getType(), skipAiProcessing)) {
-
-            Conversation conversation = mapper.mapChat2Conversation(chat);
-            ChatMessage chatMessage = mapper.mapMessage(message);
-
-            ChatRequest chatRequest = new ChatRequest();
-            chatRequest.chatMessage(chatMessage);
-            chatRequest.conversation(conversation);
-
-            try (Response response = dispatchClient.chat(chatRequest)) {
-                var chatResponse = response.readEntity(ChatMessage.class);
-                var responseMessage = mapper.mapAiSvcMessage(chatResponse);
-                responseMessage.setChat(chat);
-                msgDao.create(responseMessage);
+            if (awaitResponse) {
+                asyncAiProcessingService.forwardToAiAndStore(chat, message);
+            } else {
+                spawnAsyncAiProcessing(chat.getId(), message.getId());
             }
         }
         return message;
+    }
+
+    private void spawnAsyncAiProcessing(String chatId, String messageId) {
+        managedExecutor.runAsync(() -> {
+            try {
+                asyncAiProcessingService.process(chatId, messageId);
+                log.debug("Async AI processing completed for chatId={}", chatId);
+            } catch (Exception ex) {
+                log.error("Async AI response processing failed for chatId={}, messageId={}", chatId, messageId, ex);
+            }
+        });
     }
 
     @Transactional
