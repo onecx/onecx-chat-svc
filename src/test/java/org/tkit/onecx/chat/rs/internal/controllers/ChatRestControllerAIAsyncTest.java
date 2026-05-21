@@ -4,9 +4,11 @@ import static io.restassured.RestAssured.given;
 import static jakarta.ws.rs.core.MediaType.APPLICATION_JSON;
 import static jakarta.ws.rs.core.Response.Status.*;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 import static org.mockserver.model.HttpRequest.request;
 import static org.mockserver.model.HttpResponse.response;
 
+import java.time.Duration;
 import java.util.List;
 
 import jakarta.ws.rs.HttpMethod;
@@ -64,11 +66,7 @@ class ChatRestControllerAIAsyncTest extends AbstractTest {
                 .withId(MOCK_ID)
                 .respond(httpRequest -> {
                     // Delay dispatch response to prove API returns before AI processing finishes.
-                    try {
-                        Thread.sleep(1500);
-                    } catch (InterruptedException ex) {
-                        Thread.currentThread().interrupt();
-                    }
+                    await().pollDelay(Duration.ofMillis(1500)).until(() -> true);
                     return response().withStatusCode(200)
                             .withContentType(org.mockserver.model.MediaType.APPLICATION_JSON)
                             .withBody(JsonBody.json(chatMessage));
@@ -125,7 +123,7 @@ class ChatRestControllerAIAsyncTest extends AbstractTest {
         assertThat(immediateMessages).isNotNull().hasSize(1);
         assertThat(immediateMessages.get(0).getType()).isEqualTo(MessageTypeDTO.HUMAN);
 
-        assertEventually(() -> {
+        await().atMost(Duration.ofSeconds(20)).untilAsserted(() -> {
             var eventualMessages = given()
                     .auth().oauth2(getKeycloakClientToken("testClient"))
                     .contentType(APPLICATION_JSON)
@@ -140,32 +138,9 @@ class ChatRestControllerAIAsyncTest extends AbstractTest {
             assertThat(eventualMessages.get(1).getType()).isEqualTo(MessageTypeDTO.ASSISTANT);
         });
 
-        assertEventually(() -> mockServerClient.verify(dispatchRequestForChatId(chat.getId()),
-                org.mockserver.verify.VerificationTimes.atLeast(1)));
-    }
-
-    private void assertEventually(Runnable assertion) {
-        long deadline = System.currentTimeMillis() + 20000;
-        AssertionError lastAssertionError = null;
-        while (System.currentTimeMillis() < deadline) {
-            try {
-                assertion.run();
-                return;
-            } catch (AssertionError ex) {
-                lastAssertionError = ex;
-                try {
-                    Thread.sleep(100);
-                } catch (InterruptedException interruptedException) {
-                    Thread.currentThread().interrupt();
-                    throw new AssertionError("Interrupted while waiting for async assertion", interruptedException);
-                }
-            }
-        }
-
-        if (lastAssertionError != null) {
-            throw lastAssertionError;
-        }
-        throw new AssertionError("Async assertion did not pass in time");
+        await().atMost(Duration.ofSeconds(20))
+                .untilAsserted(() -> mockServerClient.verify(dispatchRequestForChatId(chat.getId()),
+                        org.mockserver.verify.VerificationTimes.atLeast(1)));
     }
 
     private org.mockserver.model.HttpRequest dispatchRequestForChatId(String chatId) {

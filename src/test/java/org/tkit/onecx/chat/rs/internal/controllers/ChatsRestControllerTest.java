@@ -4,9 +4,11 @@ import static io.restassured.RestAssured.given;
 import static jakarta.ws.rs.core.MediaType.APPLICATION_JSON;
 import static jakarta.ws.rs.core.Response.Status.*;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 import static org.mockserver.model.HttpRequest.request;
 import static org.mockserver.model.HttpResponse.response;
 
+import java.time.Duration;
 import java.util.List;
 
 import jakarta.ws.rs.HttpMethod;
@@ -1253,12 +1255,11 @@ class ChatsRestControllerTest extends AbstractTest {
                 .then()
                 .statusCode(ACCEPTED.getStatusCode());
 
-        try {
-            Thread.sleep(400);
-        } catch (InterruptedException ex) {
-            Thread.currentThread().interrupt();
-            throw new AssertionError("Interrupted while waiting to confirm skip-ai behavior", ex);
-        }
+        await()
+                .pollDelay(Duration.ofMillis(400))
+                .atMost(Duration.ofSeconds(2))
+                .untilAsserted(() -> mockServerClient.verify(dispatchRequestForChatId(chat.getId()),
+                        org.mockserver.verify.VerificationTimes.exactly(0)));
 
         mockServerClient.verify(dispatchRequestForChatId(chat.getId()),
                 org.mockserver.verify.VerificationTimes.exactly(0));
