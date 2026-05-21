@@ -1,7 +1,6 @@
 package org.tkit.onecx.chat.rs.internal.services;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
@@ -68,7 +67,7 @@ class ChatsServiceTest {
         }).when(managedExecutor).runAsync(any(Runnable.class));
 
         doThrow(new RuntimeException("boom"))
-                .when(asyncAiProcessingService).process(eq("chat-id"), eq("msg-id"));
+                .when(asyncAiProcessingService).process("chat-id", "msg-id");
 
         var result = Assertions.assertDoesNotThrow(() -> service.createChatMessage(chat, dto));
 
