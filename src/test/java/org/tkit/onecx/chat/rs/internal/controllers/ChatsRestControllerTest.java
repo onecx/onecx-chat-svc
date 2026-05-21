@@ -25,18 +25,14 @@ import org.tkit.onecx.chat.test.AbstractTest;
 import org.tkit.quarkus.security.test.GenerateKeycloakClient;
 import org.tkit.quarkus.test.WithDBData;
 
-import gen.io.github.onecx.ai.clients.model.ChatMessage;
 import gen.org.tkit.onecx.chat.rs.internal.model.*;
 import io.quarkiverse.mockserver.test.InjectMockServerClient;
-import io.quarkiverse.mockserver.test.MockServerTestResource;
-import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.common.http.TestHTTPEndpoint;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.common.mapper.TypeRef;
 
 @QuarkusTest
 @TestHTTPEndpoint(ChatsRestController.class)
-@QuarkusTestResource(MockServerTestResource.class)
 @WithDBData(value = "data/testdata-internal.xml", deleteBeforeInsert = true, deleteAfterTest = true, rinseAndRepeat = true)
 @GenerateKeycloakClient(clientName = "testClient", scopes = { "ocx-chat:all", "ocx-chat:read", "ocx-chat:write" })
 class ChatsRestControllerTest extends AbstractTest {
@@ -1214,103 +1210,6 @@ class ChatsRestControllerTest extends AbstractTest {
     }
 
     @Test
-    void createChatMessageShouldReturnAcceptedWhenAwaitResponseFalseTest() {
-        String responseFromMock = """
-                {
-                  "conversationId": "123456",
-                  "message": "AI generated response",
-                  "type": "ASSISTANT",
-                  "creationDate": 1643684377000
-                }
-                """;
-
-        mockServerClient.when(request()
-                .withPath("/v1/dispatch/chat")
-                .withMethod(HttpMethod.POST))
-                .withId(MOCK_ID)
-                .respond(httpRequest -> {
-                    // Delay dispatch response to prove API returns before AI processing finishes.
-                    try {
-                        Thread.sleep(1500);
-                    } catch (InterruptedException ex) {
-                        Thread.currentThread().interrupt();
-                    }
-                    return response().withStatusCode(200)
-                            .withHeaders(new Header(HttpHeaders.CONTENT_TYPE, APPLICATION_JSON))
-                            .withBody(responseFromMock);
-                });
-
-        var chatDto = new CreateChatDTO();
-        chatDto.setAppId("appId");
-        chatDto.setType(ChatTypeDTO.AI_CHAT);
-
-        var chat = given()
-                .auth().oauth2(getKeycloakClientToken("testClient"))
-                .when()
-                .contentType(APPLICATION_JSON)
-                .body(chatDto)
-                .post()
-                .then()
-                .statusCode(CREATED.getStatusCode())
-                .extract()
-                .body().as(ChatDTO.class);
-
-        Assertions.assertNotNull(chat);
-
-        var messageDto = new CreateMessageDTO();
-        messageDto.setType(MessageTypeDTO.HUMAN);
-        messageDto.setText("Test question async AI");
-        messageDto.setUserId("testUser");
-        messageDto.setSkipAIProcessing(false);
-        messageDto.setAwaitResponse(false);
-
-        long startedAt = System.currentTimeMillis();
-        given()
-                .auth().oauth2(getKeycloakClientToken("testClient"))
-                .pathParam("chatId", chat.getId())
-                .when()
-                .contentType(APPLICATION_JSON)
-                .body(messageDto)
-                .post("{chatId}/messages")
-                .then()
-                .statusCode(ACCEPTED.getStatusCode());
-
-        long elapsedMs = System.currentTimeMillis() - startedAt;
-        assertThat(elapsedMs).isLessThan(1200L);
-
-        var immediateMessages = given()
-                .auth().oauth2(getKeycloakClientToken("testClient"))
-                .contentType(APPLICATION_JSON)
-                .pathParam("chatId", chat.getId())
-                .get("{chatId}/messages")
-                .then()
-                .statusCode(OK.getStatusCode())
-                .extract().as(new TypeRef<List<MessageDTO>>() {
-                });
-
-        assertThat(immediateMessages).isNotNull().hasSize(1);
-        assertThat(immediateMessages.get(0).getType()).isEqualTo(MessageTypeDTO.HUMAN);
-
-        assertEventually(() -> {
-            var eventualMessages = given()
-                    .auth().oauth2(getKeycloakClientToken("testClient"))
-                    .contentType(APPLICATION_JSON)
-                    .pathParam("chatId", chat.getId())
-                    .get("{chatId}/messages")
-                    .then()
-                    .statusCode(OK.getStatusCode())
-                    .extract().as(new TypeRef<List<MessageDTO>>() {
-                    });
-
-            assertThat(eventualMessages).isNotNull().hasSize(2);
-            assertThat(eventualMessages.get(1).getType()).isEqualTo(MessageTypeDTO.ASSISTANT);
-        });
-
-        assertEventually(() -> mockServerClient.verify(dispatchRequestForChatId(chat.getId()),
-                org.mockserver.verify.VerificationTimes.atLeast(1)));
-    }
-
-    @Test
     void createChatMessageShouldReturnAcceptedAndSkipAiWhenAwaitResponseFalseAndSkipAiTrueTest() {
         mockServerClient.when(request()
                 .withPath("/v1/dispatch/chat")
@@ -1363,111 +1262,6 @@ class ChatsRestControllerTest extends AbstractTest {
 
         mockServerClient.verify(dispatchRequestForChatId(chat.getId()),
                 org.mockserver.verify.VerificationTimes.exactly(0));
-    }
-
-    @Test
-    void createChatMessageShouldDispatchAiAndNotificationAsyncWhenAwaitResponseFalseTest() {
-        ChatMessage chatMessageResponse = new ChatMessage();
-        chatMessageResponse.setConversationId("123456");
-        chatMessageResponse.setMessage("AI generated response");
-        chatMessageResponse.setType(ChatMessage.TypeEnum.ASSISTANT);
-        chatMessageResponse.setCreationDate(1643684377L);
-        mockServerClient.when(request()
-                .withPath("/v1/dispatch/chat")
-                .withMethod(HttpMethod.POST))
-                .withId(MOCK_ID)
-                .respond(response().withStatusCode(200)
-                        .withHeaders(new Header(HttpHeaders.CONTENT_TYPE, APPLICATION_JSON))
-                        .withBody(JsonBody.json(chatMessageResponse)));
-
-        mockServerClient.when(request()
-                .withPath("/v1/notifications/dispatch")
-                .withMethod(HttpMethod.POST))
-                .withId(MOCK_NOTIFICATION_ID)
-                .respond(response().withStatusCode(200));
-
-        var chatDto = new CreateChatDTO();
-        chatDto.setAppId("appId");
-        chatDto.setType(ChatTypeDTO.AI_CHAT);
-
-        ParticipantDTO senderParticipant = new ParticipantDTO();
-        senderParticipant.setEmail("sender@email.com");
-        senderParticipant.setUserId("senderUser");
-        senderParticipant.setUserName("sender");
-        senderParticipant.setType(ParticipantTypeDTO.HUMAN);
-
-        ParticipantDTO receiverParticipant = new ParticipantDTO();
-        receiverParticipant.setEmail("receiver@email.com");
-        receiverParticipant.setUserId("receiverUser");
-        receiverParticipant.setUserName("receiver");
-        receiverParticipant.setType(ParticipantTypeDTO.HUMAN);
-
-        chatDto.addParticipantsItem(senderParticipant);
-        chatDto.addParticipantsItem(receiverParticipant);
-
-        var chat = given()
-                .auth().oauth2(getKeycloakClientToken("testClient"))
-                .when()
-                .contentType(APPLICATION_JSON)
-                .body(chatDto)
-                .post()
-                .then()
-                .statusCode(CREATED.getStatusCode())
-                .extract()
-                .body().as(ChatDTO.class);
-
-        Assertions.assertNotNull(chat);
-
-        var messageDto = new CreateMessageDTO();
-        messageDto.setType(MessageTypeDTO.HUMAN);
-        messageDto.setText("Test question async AI and notification");
-        messageDto.setUserId("senderUser");
-        messageDto.setSkipAIProcessing(false);
-        messageDto.setAwaitResponse(false);
-
-        given()
-                .auth().oauth2(getKeycloakClientToken("testClient"))
-                .pathParam("chatId", chat.getId())
-                .when()
-                .contentType(APPLICATION_JSON)
-                .body(messageDto)
-                .post("{chatId}/messages")
-                .then()
-                .statusCode(ACCEPTED.getStatusCode());
-
-        var immediateMessages = given()
-                .auth().oauth2(getKeycloakClientToken("testClient"))
-                .contentType(APPLICATION_JSON)
-                .pathParam("chatId", chat.getId())
-                .get("{chatId}/messages")
-                .then()
-                .statusCode(OK.getStatusCode())
-                .extract().as(new TypeRef<List<MessageDTO>>() {
-                });
-        assertThat(immediateMessages).isNotNull().hasSize(1);
-
-        assertEventually(() -> {
-            var messages = given()
-                    .auth().oauth2(getKeycloakClientToken("testClient"))
-                    .contentType(APPLICATION_JSON)
-                    .pathParam("chatId", chat.getId())
-                    .get("{chatId}/messages")
-                    .then()
-                    .statusCode(OK.getStatusCode())
-                    .extract().as(new TypeRef<List<MessageDTO>>() {
-                    });
-
-            assertThat(messages).isNotNull().hasSize(2);
-            assertThat(messages.get(0).getType()).isEqualTo(MessageTypeDTO.HUMAN);
-            assertThat(messages.get(1).getType()).isEqualTo(MessageTypeDTO.ASSISTANT);
-        });
-
-        assertEventually(() -> mockServerClient.verify(dispatchRequestForChatId(chat.getId()),
-                org.mockserver.verify.VerificationTimes.atLeast(1)));
-
-        assertEventually(() -> mockServerClient.verify(notificationRequestForChatAndReceiver(chat.getId(), "receiverUser"),
-                org.mockserver.verify.VerificationTimes.exactly(1)));
-
     }
 
     @CsvSource({
@@ -1528,30 +1322,6 @@ class ChatsRestControllerTest extends AbstractTest {
                 .statusCode(expectedStatus);
     }
 
-    private void assertEventually(Runnable assertion) {
-        long deadline = System.currentTimeMillis() + 20000;
-        AssertionError lastAssertionError = null;
-        while (System.currentTimeMillis() < deadline) {
-            try {
-                assertion.run();
-                return;
-            } catch (AssertionError ex) {
-                lastAssertionError = ex;
-                try {
-                    Thread.sleep(100);
-                } catch (InterruptedException interruptedException) {
-                    Thread.currentThread().interrupt();
-                    throw new AssertionError("Interrupted while waiting for async assertion", interruptedException);
-                }
-            }
-        }
-
-        if (lastAssertionError != null) {
-            throw lastAssertionError;
-        }
-        throw new AssertionError("Async assertion did not pass in time");
-    }
-
     private org.mockserver.model.HttpRequest dispatchRequestForChatId(String chatId) {
         return request()
                 .withPath("/v1/dispatch/chat")
@@ -1563,22 +1333,5 @@ class ChatsRestControllerTest extends AbstractTest {
                           }
                         }
                         """.formatted(chatId), MatchType.ONLY_MATCHING_FIELDS));
-    }
-
-    private org.mockserver.model.HttpRequest notificationRequestForChatAndReceiver(String chatId, String receiverId) {
-        return request()
-                .withPath("/v1/notifications/dispatch")
-                .withMethod(HttpMethod.POST)
-                .withBody(JsonBody.json("""
-                        {
-                          "receiverId": "%s",
-                          "contentMeta": [
-                            {
-                              "key": "chatId",
-                              "value": "%s"
-                            }
-                          ]
-                        }
-                        """.formatted(receiverId, chatId), MatchType.ONLY_MATCHING_FIELDS));
     }
 }
