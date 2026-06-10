@@ -7,6 +7,7 @@ import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 
 import org.eclipse.microprofile.context.ManagedExecutor;
+import org.eclipse.microprofile.context.ThreadContext;
 import org.tkit.onecx.chat.domain.daos.ChatDAO;
 import org.tkit.onecx.chat.domain.daos.MessageDAO;
 import org.tkit.onecx.chat.domain.daos.ParticipantDAO;
@@ -17,6 +18,7 @@ import org.tkit.onecx.chat.rs.internal.mappers.ChatMapper;
 import org.tkit.onecx.chat.rs.internal.mappers.ExceptionMapper;
 
 import gen.org.tkit.onecx.chat.rs.internal.model.*;
+import io.smallrye.context.api.ManagedExecutorConfig;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -43,6 +45,7 @@ public class ChatsService {
     ParticipantService participantService;
 
     @Inject
+    @ManagedExecutorConfig(cleared = ThreadContext.ALL_REMAINING, propagated = {})
     ManagedExecutor managedExecutor;
 
     @Inject

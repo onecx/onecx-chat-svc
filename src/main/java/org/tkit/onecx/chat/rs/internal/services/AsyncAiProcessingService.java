@@ -48,7 +48,6 @@ public class AsyncAiProcessingService {
     @RestClient
     NotificationV1Api notificationClient;
 
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
     public void process(String chatId, String messageId) {
         var chat = chatDao.findById(chatId);
         var message = messageDao.findById(messageId);
@@ -73,10 +72,21 @@ public class AsyncAiProcessingService {
 
         try (Response response = dispatchClient.chat(chatRequest)) {
             var chatResponse = response.readEntity(ChatMessage.class);
-            var responseMessage = mapper.mapAiSvcMessage(chatResponse);
-            responseMessage.setChat(chat);
-            messageDao.create(responseMessage);
+            storeAiResponse(chat.getId(), chatResponse);
         }
+    }
+
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public void storeAiResponse(String chatId, ChatMessage chatResponse) {
+        var managedChat = chatDao.findById(chatId);
+        if (managedChat == null) {
+            log.warn("Skipping AI response persistence because chat was not found. chatId={}", chatId);
+            return;
+        }
+
+        var responseMessage = mapper.mapAiSvcMessage(chatResponse);
+        responseMessage.setChat(managedChat);
+        messageDao.create(responseMessage);
     }
 
     private void notifyAsyncAiResponseReady(Chat chat, Message message) {
@@ -98,7 +108,10 @@ public class AsyncAiProcessingService {
                     .severity(Severity.NORMAL)
                     .contentMeta(contentMetaList);
 
-            notificationClient.dispatchNotification(notification);
+            Response ignored = notificationClient.dispatchNotification(notification);
+            if (ignored != null) {
+                ignored.close();
+            }
         }
     }
 }
