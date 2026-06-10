@@ -1,17 +1,16 @@
 package org.tkit.onecx.chat.rs.internal.services;
 
+import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.util.concurrent.CompletableFuture;
+import java.time.Duration;
 
 import jakarta.inject.Inject;
 
-import org.eclipse.microprofile.context.ManagedExecutor;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.tkit.onecx.chat.domain.daos.MessageDAO;
@@ -36,9 +35,6 @@ class ChatsServiceTest {
     MessageDAO msgDao;
 
     @InjectMock
-    ManagedExecutor managedExecutor;
-
-    @InjectMock
     AsyncAiProcessingService asyncAiProcessingService;
 
     @Test
@@ -60,12 +56,6 @@ class ChatsServiceTest {
         when(mapper.createMessage(dto)).thenReturn(createdMessage);
         when(msgDao.create(createdMessage)).thenReturn(createdMessage);
 
-        doAnswer(invocation -> {
-            Runnable runnable = invocation.getArgument(0);
-            runnable.run();
-            return CompletableFuture.completedFuture(null);
-        }).when(managedExecutor).runAsync(any(Runnable.class));
-
         doThrow(new RuntimeException("boom"))
                 .when(asyncAiProcessingService).process("chat-id", "msg-id");
 
@@ -73,7 +63,8 @@ class ChatsServiceTest {
 
         Assertions.assertNotNull(result);
         Assertions.assertEquals("msg-id", result.getId());
-        verify(asyncAiProcessingService).process("chat-id", "msg-id");
+        await().atMost(Duration.ofSeconds(2))
+                .untilAsserted(() -> verify(asyncAiProcessingService).process("chat-id", "msg-id"));
         verify(asyncAiProcessingService, never()).forwardToAiAndStore(any(), any());
     }
 }
