@@ -108,9 +108,9 @@ public class AsyncAiProcessingService {
                     .severity(Severity.NORMAL)
                     .contentMeta(contentMetaList);
 
-            Response ignored = notificationClient.dispatchNotification(notification);
-            if (ignored != null) {
-                ignored.close();
+            try (Response _ = notificationClient.dispatchNotification(notification)) {
+                log.debug("Dispatched async AI response ready notification to user {} for chat {}", participant.getUserId(),
+                        chat.getId());
             }
         }
     }

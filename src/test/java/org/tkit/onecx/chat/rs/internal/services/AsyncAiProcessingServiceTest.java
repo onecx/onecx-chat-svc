@@ -2,6 +2,7 @@ package org.tkit.onecx.chat.rs.internal.services;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -164,5 +165,64 @@ class AsyncAiProcessingServiceTest {
 
         verify(messageDao).create(persistedAiMessage);
         verify(notificationClient, never()).dispatchNotification(any(Notification.class));
+    }
+
+    @Test
+    void processShouldCloseNotificationResponseWhenPresent() {
+        var chatId = "chat-id";
+        var messageId = "message-id";
+        var senderUser = "sender";
+        var receiverUser = "receiver";
+
+        var chat = new Chat();
+        chat.setId(chatId);
+        var sender = new Participant();
+        sender.setUserId(senderUser);
+        var receiver = new Participant();
+        receiver.setUserId(receiverUser);
+        chat.setParticipants(new HashSet<>());
+        chat.getParticipants().add(sender);
+        chat.getParticipants().add(receiver);
+
+        var message = new Message();
+        message.setId(messageId);
+        message.setUserId(senderUser);
+
+        var conversation = new Conversation();
+        conversation.setConversationId(chatId);
+        var requestMessage = new ChatMessage();
+        requestMessage.setConversationId(messageId);
+        var aiChatMessage = new ChatMessage();
+        aiChatMessage.setConversationId("ai-msg");
+        aiChatMessage.setMessage("AI response");
+        aiChatMessage.setType(ChatMessage.TypeEnum.ASSISTANT);
+        var persistedAiMessage = new Message();
+        var notificationResponse = mock(Response.class);
+
+        when(chatDao.findById(chatId)).thenReturn(chat);
+        when(messageDao.findById(messageId)).thenReturn(message);
+        when(mapper.mapChat2Conversation(chat)).thenReturn(conversation);
+        when(mapper.mapMessage(message)).thenReturn(requestMessage);
+        when(dispatchClient.chat(any())).thenReturn(Response.ok(aiChatMessage).build());
+        when(mapper.mapAiSvcMessage(aiChatMessage)).thenReturn(persistedAiMessage);
+        when(notificationClient.dispatchNotification(any(Notification.class))).thenReturn(notificationResponse);
+
+        service.process(chatId, messageId);
+
+        verify(notificationClient).dispatchNotification(any(Notification.class));
+        verify(notificationResponse).close();
+    }
+
+    @Test
+    void storeAiResponseShouldReturnWhenManagedChatNotFound() {
+        var chatId = "missing-chat-id";
+        var chatResponse = new ChatMessage();
+
+        when(chatDao.findById(chatId)).thenReturn(null);
+
+        Assertions.assertDoesNotThrow(() -> service.storeAiResponse(chatId, chatResponse));
+
+        verify(mapper, never()).mapAiSvcMessage(any(ChatMessage.class));
+        verify(messageDao, never()).create(any(Message.class));
     }
 }
