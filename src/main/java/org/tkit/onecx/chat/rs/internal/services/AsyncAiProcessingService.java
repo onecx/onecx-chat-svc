@@ -97,8 +97,9 @@ public class AsyncAiProcessingService {
         contentMetaList.add(new ContentMeta().key("chatId").value(chat.getId()));
         contentMetaList.add(new ContentMeta().key("type").value("update_chat"));
 
+        boolean notifyOriginalSender = Chat.ChatType.AI_CHAT.equals(chat.getType());
         for (Participant participant : chat.getParticipants()) {
-            if (Objects.equals(message.getUserId(), participant.getUserId())) {
+            if (!notifyOriginalSender && Objects.equals(message.getUserId(), participant.getUserId())) {
                 continue;
             }
 
