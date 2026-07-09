@@ -2,6 +2,7 @@ package org.tkit.onecx.chat.rs.internal.services;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -97,7 +98,7 @@ public class AsyncAiProcessingService {
         contentMetaList.add(new ContentMeta().key("type").value("update_chat"));
 
         for (Participant participant : chat.getParticipants()) {
-            if (message.getUserId().equals(participant.getUserId())) {
+            if (Objects.equals(message.getUserId(), participant.getUserId())) {
                 continue;
             }
 
