@@ -28,6 +28,7 @@ import org.tkit.onecx.chat.rs.internal.mappers.ChatMapper;
 import gen.io.github.onecx.ai.clients.api.DispatchApi;
 import gen.io.github.onecx.ai.clients.model.ChatMessage;
 import gen.io.github.onecx.ai.clients.model.Conversation;
+import gen.io.github.onecx.ai.clients.model.RequestContext;
 import gen.io.github.onecx.notification.clients.api.NotificationV1Api;
 import gen.io.github.onecx.notification.clients.model.Notification;
 import io.quarkus.test.InjectMock;
@@ -61,7 +62,7 @@ class AsyncAiProcessingServiceTest {
         when(chatDao.findById(anyString())).thenReturn(null);
         when(messageDao.findById(anyString())).thenReturn(new Message());
 
-        service.process("chat-id", "message-id");
+        service.process("chat-id", "message-id", new RequestContext());
 
         verifyNoInteractions(dispatchClient, notificationClient);
         verify(messageDao, never()).create(any(Message.class));
@@ -72,7 +73,7 @@ class AsyncAiProcessingServiceTest {
         when(chatDao.findById(anyString())).thenReturn(new Chat());
         when(messageDao.findById(anyString())).thenReturn(null);
 
-        service.process("chat-id", "message-id");
+        service.process("chat-id", "message-id", new RequestContext());
 
         verifyNoInteractions(dispatchClient, notificationClient);
         verify(messageDao, never()).create(any(Message.class));
@@ -116,7 +117,7 @@ class AsyncAiProcessingServiceTest {
         when(dispatchClient.chat(any())).thenReturn(Response.ok(aiChatMessage).build());
         when(mapper.mapAiSvcMessage(aiChatMessage)).thenReturn(persistedAiMessage);
 
-        service.process(chatId, messageId);
+        service.process(chatId, messageId, new RequestContext());
 
         verify(messageDao).create(persistedAiMessage);
         var notificationCaptor = ArgumentCaptor.forClass(Notification.class);
@@ -161,7 +162,7 @@ class AsyncAiProcessingServiceTest {
         when(dispatchClient.chat(any())).thenReturn(Response.ok(aiChatMessage).build());
         when(mapper.mapAiSvcMessage(aiChatMessage)).thenReturn(persistedAiMessage);
 
-        service.process(chatId, messageId);
+        service.process(chatId, messageId, new RequestContext());
 
         verify(messageDao).create(persistedAiMessage);
         verify(notificationClient, never()).dispatchNotification(any(Notification.class));
@@ -207,7 +208,7 @@ class AsyncAiProcessingServiceTest {
         when(mapper.mapAiSvcMessage(aiChatMessage)).thenReturn(persistedAiMessage);
         when(notificationClient.dispatchNotification(any(Notification.class))).thenReturn(notificationResponse);
 
-        service.process(chatId, messageId);
+        service.process(chatId, messageId, new RequestContext());
 
         verify(notificationClient).dispatchNotification(any(Notification.class));
         verify(notificationResponse).close();
