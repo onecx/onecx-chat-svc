@@ -88,6 +88,7 @@ class AsyncAiProcessingServiceTest {
 
         var chat = new Chat();
         chat.setId(chatId);
+        chat.setType(Chat.ChatType.HUMAN_GROUP_CHAT);
         var sender = new Participant();
         sender.setUserId(senderUser);
         var receiver = new Participant();
@@ -129,13 +130,60 @@ class AsyncAiProcessingServiceTest {
     }
 
     @Test
-    void processShouldNotNotifyWhenOnlySenderParticipates() {
+    void processShouldNotifyWhenOnlySenderParticipatesInAiChat() {
         var chatId = "chat-id";
         var messageId = "message-id";
         var senderUser = "sender";
 
         var chat = new Chat();
         chat.setId(chatId);
+        chat.setType(Chat.ChatType.AI_CHAT);
+        var sender = new Participant();
+        sender.setUserId(senderUser);
+        chat.setParticipants(new HashSet<>());
+        chat.getParticipants().add(sender);
+
+        var message = new Message();
+        message.setId(messageId);
+        message.setUserId(senderUser);
+
+        var conversation = new Conversation();
+        conversation.setConversationId(chatId);
+        var requestMessage = new ChatMessage();
+        requestMessage.setConversationId(messageId);
+        var aiChatMessage = new ChatMessage();
+        aiChatMessage.setConversationId("ai-msg");
+        aiChatMessage.setMessage("AI response");
+        aiChatMessage.setType(ChatMessage.TypeEnum.ASSISTANT);
+        var persistedAiMessage = new Message();
+
+        when(chatDao.findById(chatId)).thenReturn(chat);
+        when(messageDao.findById(messageId)).thenReturn(message);
+        when(mapper.mapChat2Conversation(chat)).thenReturn(conversation);
+        when(mapper.mapMessage(message)).thenReturn(requestMessage);
+        when(dispatchClient.chat(any())).thenReturn(Response.ok(aiChatMessage).build());
+        when(mapper.mapAiSvcMessage(aiChatMessage)).thenReturn(persistedAiMessage);
+
+        service.process(chatId, messageId, new RequestContext());
+
+        verify(messageDao).create(persistedAiMessage);
+        var notificationCaptor = ArgumentCaptor.forClass(Notification.class);
+        verify(notificationClient, times(1)).dispatchNotification(notificationCaptor.capture());
+
+        var notification = notificationCaptor.getValue();
+        Assertions.assertEquals(senderUser, notification.getSenderId());
+        Assertions.assertEquals(senderUser, notification.getReceiverId());
+    }
+
+    @Test
+    void processShouldNotNotifyWhenOnlySenderParticipatesInHumanDirectChat() {
+        var chatId = "chat-id";
+        var messageId = "message-id";
+        var senderUser = "sender";
+
+        var chat = new Chat();
+        chat.setId(chatId);
+        chat.setType(Chat.ChatType.HUMAN_DIRECT_CHAT);
         var sender = new Participant();
         sender.setUserId(senderUser);
         chat.setParticipants(new HashSet<>());
