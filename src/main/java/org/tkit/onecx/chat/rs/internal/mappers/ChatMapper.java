@@ -144,6 +144,9 @@ public interface ChatMapper {
     }
 
     static LocalDateTime mapLongTime(Long timestamp) {
+        if (timestamp == null) {
+            return null;
+        }
         return Instant.ofEpochSecond(timestamp).atZone(ZoneId.systemDefault()).toLocalDateTime();
     }
 
