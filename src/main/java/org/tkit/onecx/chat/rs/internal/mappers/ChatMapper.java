@@ -27,6 +27,7 @@ import org.tkit.quarkus.rs.mappers.OffsetDateTimeMapper;
 import gen.io.github.onecx.ai.clients.model.ChatMessage;
 import gen.io.github.onecx.ai.clients.model.ChatMessage.TypeEnum;
 import gen.io.github.onecx.ai.clients.model.Conversation;
+import gen.io.github.onecx.ai.clients.model.RequestContext;
 import gen.org.tkit.onecx.chat.rs.internal.model.*;
 
 @Mapper(uses = { OffsetDateTimeMapper.class })
@@ -173,4 +174,6 @@ public interface ChatMapper {
     void updateParticipant(@MappingTarget Participant participant, ParticipantDTO participantDTO);
 
     ParticipantDTO mapToParticipantDTO(AddParticipantDTO addParticipantDTO);
+
+    RequestContext mapContext(RequestContextDTO requestContext);
 }

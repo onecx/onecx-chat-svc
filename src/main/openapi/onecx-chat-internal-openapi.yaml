@@ -592,8 +592,8 @@ components:
         filter:
           $ref: '#/components/schemas/ConfigurationFilter'
         aiContext:
-          type: object
-          additionalProperties:
+          type: array
+          items:
             type: string
     ConfigurationFilter:
       type: object

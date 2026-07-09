@@ -20,6 +20,7 @@ import gen.io.github.onecx.ai.clients.api.DispatchApi;
 import gen.io.github.onecx.ai.clients.model.ChatMessage;
 import gen.io.github.onecx.ai.clients.model.ChatRequest;
 import gen.io.github.onecx.ai.clients.model.Conversation;
+import gen.io.github.onecx.ai.clients.model.RequestContext;
 import gen.io.github.onecx.notification.clients.api.NotificationV1Api;
 import gen.io.github.onecx.notification.clients.model.ContentMeta;
 import gen.io.github.onecx.notification.clients.model.Issuer;
@@ -48,7 +49,7 @@ public class AsyncAiProcessingService {
     @RestClient
     NotificationV1Api notificationClient;
 
-    public void process(String chatId, String messageId) {
+    public void process(String chatId, String messageId, RequestContext context) {
         var chat = chatDao.findById(chatId);
         var message = messageDao.findById(messageId);
 
@@ -58,17 +59,18 @@ public class AsyncAiProcessingService {
             return;
         }
 
-        forwardToAiAndStore(chat, message);
+        forwardToAiAndStore(chat, message, context);
         notifyAsyncAiResponseReady(chat, message);
     }
 
-    public void forwardToAiAndStore(Chat chat, Message message) {
+    public void forwardToAiAndStore(Chat chat, Message message, RequestContext context) {
         Conversation conversation = mapper.mapChat2Conversation(chat);
         ChatMessage chatMessage = mapper.mapMessage(message);
 
         ChatRequest chatRequest = new ChatRequest();
         chatRequest.chatMessage(chatMessage);
         chatRequest.conversation(conversation);
+        chatRequest.setRequestContext(context);
 
         try (Response response = dispatchClient.chat(chatRequest)) {
             var chatResponse = response.readEntity(ChatMessage.class);

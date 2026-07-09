@@ -17,6 +17,7 @@ import org.tkit.onecx.chat.domain.models.Participant;
 import org.tkit.onecx.chat.rs.internal.mappers.ChatMapper;
 import org.tkit.onecx.chat.rs.internal.mappers.ExceptionMapper;
 
+import gen.io.github.onecx.ai.clients.model.RequestContext;
 import gen.org.tkit.onecx.chat.rs.internal.model.*;
 import io.smallrye.context.api.ManagedExecutorConfig;
 import lombok.extern.slf4j.Slf4j;
@@ -84,23 +85,25 @@ public class ChatsService {
         var message = mapper.createMessage(createMessageDTO);
         message.setChat(chat);
         message = msgDao.create(message);
+
+        var aiContext = mapper.mapContext(createMessageDTO.getRequestContext());
         var skipAiProcessing = Optional.ofNullable(createMessageDTO.getSkipAIProcessing()).orElse(false);
         var awaitResponse = !Boolean.FALSE.equals(createMessageDTO.getAwaitResponse());
 
         if (shouldForwardToAiService(chat.getType(), skipAiProcessing)) {
             if (awaitResponse) {
-                asyncAiProcessingService.forwardToAiAndStore(chat, message);
+                asyncAiProcessingService.forwardToAiAndStore(chat, message, aiContext);
             } else {
-                spawnAsyncAiProcessing(chat.getId(), message.getId());
+                spawnAsyncAiProcessing(chat.getId(), message.getId(), aiContext);
             }
         }
         return message;
     }
 
-    private void spawnAsyncAiProcessing(String chatId, String messageId) {
+    private void spawnAsyncAiProcessing(String chatId, String messageId, RequestContext context) {
         managedExecutor.runAsync(() -> {
             try {
-                asyncAiProcessingService.process(chatId, messageId);
+                asyncAiProcessingService.process(chatId, messageId, context);
                 log.debug("Async AI processing completed for chatId={}", chatId);
             } catch (Exception ex) {
                 log.error("Async AI response processing failed for chatId={}, messageId={}", chatId, messageId, ex);
