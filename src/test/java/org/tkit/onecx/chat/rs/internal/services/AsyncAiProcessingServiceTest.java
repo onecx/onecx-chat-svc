@@ -133,6 +133,26 @@ class AsyncAiProcessingServiceTest {
     }
 
     @Test
+    void onAsyncAiProcessingRequestedShouldCatchProcessException() {
+        var chatId = "chat-id";
+        var messageId = "message-id";
+
+        when(managedExecutor.runAsync(any())).thenAnswer(invocation -> {
+            ((Runnable) invocation.getArgument(0)).run();
+            return CompletableFuture.completedFuture(null);
+        });
+        when(chatDao.findById(chatId)).thenThrow(new RuntimeException("db error"));
+
+        Assertions.assertDoesNotThrow(
+                () -> service
+                        .onAsyncAiProcessingRequested(new AsyncAiProcessingRequest(chatId, messageId, new RequestContext())));
+
+        verify(managedExecutor).runAsync(any());
+        verify(messageDao, never()).create(any(Message.class));
+        verifyNoInteractions(notificationClient);
+    }
+
+    @Test
     void processShouldNotifyOnlyNonSenderParticipants() {
         var chatId = "chat-id";
         var messageId = "message-id";
