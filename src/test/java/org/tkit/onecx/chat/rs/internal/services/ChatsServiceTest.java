@@ -1,15 +1,13 @@
 package org.tkit.onecx.chat.rs.internal.services;
 
 import static org.awaitility.Awaitility.await;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.Duration;
 import java.util.List;
 
+import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
 
 import org.junit.jupiter.api.Assertions;
@@ -40,10 +38,10 @@ class ChatsServiceTest {
     MessageDAO msgDao;
 
     @InjectMock
-    AsyncAiProcessingService asyncAiProcessingService;
+    Event<AsyncAiProcessingRequest> asyncAiProcessingRequestEvent;
 
     @Test
-    void createChatMessageAsyncShouldSwallowProcessingExceptionsTest() {
+    void createChatMessageAsyncShouldPublishProcessingEventTest() {
         var chat = new Chat();
         chat.setId("chat-id");
         chat.setType(Chat.ChatType.AI_CHAT);
@@ -70,15 +68,12 @@ class ChatsServiceTest {
         requestContext.setFilter(new AgentFilter().key(AgentFilter.KeyEnum.APP_ID).value("test"));
         when(mapper.mapContext(requestContextDTO)).thenReturn(requestContext);
 
-        doThrow(new RuntimeException("boom"))
-                .when(asyncAiProcessingService).process("chat-id", "msg-id", requestContext);
-
         var result = Assertions.assertDoesNotThrow(() -> service.createChatMessage(chat, dto));
 
         Assertions.assertNotNull(result);
         Assertions.assertEquals("msg-id", result.getId());
         await().atMost(Duration.ofSeconds(2))
-                .untilAsserted(() -> verify(asyncAiProcessingService).process("chat-id", "msg-id", requestContext));
-        verify(asyncAiProcessingService, never()).forwardToAiAndStore(any(), any(), any());
+                .untilAsserted(() -> verify(asyncAiProcessingRequestEvent)
+                        .fire(new AsyncAiProcessingRequest("chat-id", "msg-id", requestContext)));
     }
 }

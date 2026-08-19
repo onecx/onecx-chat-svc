@@ -10,10 +10,12 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.util.HashSet;
+import java.util.concurrent.CompletableFuture;
 
 import jakarta.inject.Inject;
 import jakarta.ws.rs.core.Response;
 
+import org.eclipse.microprofile.context.ManagedExecutor;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -57,6 +59,9 @@ class AsyncAiProcessingServiceTest {
     @RestClient
     NotificationV1Api notificationClient;
 
+    @InjectMock
+    ManagedExecutor managedExecutor;
+
     @Test
     void processShouldReturnWhenChatNotFound() {
         when(chatDao.findById(anyString())).thenReturn(null);
@@ -77,6 +82,54 @@ class AsyncAiProcessingServiceTest {
 
         verifyNoInteractions(dispatchClient, notificationClient);
         verify(messageDao, never()).create(any(Message.class));
+    }
+
+    @Test
+    void onAsyncAiProcessingRequestedShouldRunProcessAfterCommit() {
+        var chatId = "chat-id";
+        var messageId = "message-id";
+
+        var chat = new Chat();
+        chat.setId(chatId);
+        chat.setType(Chat.ChatType.HUMAN_GROUP_CHAT);
+        var sender = new Participant();
+        sender.setUserId("sender");
+        var receiver = new Participant();
+        receiver.setUserId("receiver");
+        chat.setParticipants(new HashSet<>());
+        chat.getParticipants().add(sender);
+        chat.getParticipants().add(receiver);
+
+        var message = new Message();
+        message.setId(messageId);
+        message.setUserId("sender");
+
+        var conversation = new Conversation();
+        conversation.setConversationId(chatId);
+        var requestMessage = new ChatMessage();
+        requestMessage.setConversationId(messageId);
+        var aiChatMessage = new ChatMessage();
+        aiChatMessage.setConversationId("ai-msg");
+        aiChatMessage.setMessage("AI response");
+        aiChatMessage.setType(ChatMessage.TypeEnum.ASSISTANT);
+        var persistedAiMessage = new Message();
+
+        when(managedExecutor.runAsync(any())).thenAnswer(invocation -> {
+            ((Runnable) invocation.getArgument(0)).run();
+            return CompletableFuture.completedFuture(null);
+        });
+        when(chatDao.findById(chatId)).thenReturn(chat);
+        when(messageDao.findById(messageId)).thenReturn(message);
+        when(mapper.mapChat2Conversation(chat)).thenReturn(conversation);
+        when(mapper.mapMessage(message)).thenReturn(requestMessage);
+        when(dispatchClient.chat(any())).thenReturn(Response.ok(aiChatMessage).build());
+        when(mapper.mapAiSvcMessage(aiChatMessage)).thenReturn(persistedAiMessage);
+
+        service.onAsyncAiProcessingRequested(new AsyncAiProcessingRequest(chatId, messageId, new RequestContext()));
+
+        verify(dispatchClient).chat(any());
+        verify(messageDao).create(persistedAiMessage);
+        verify(notificationClient, times(1)).dispatchNotification(any(Notification.class));
     }
 
     @Test

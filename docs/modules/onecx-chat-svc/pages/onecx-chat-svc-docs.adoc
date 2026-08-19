@@ -38,6 +38,7 @@ quarkus.openapi-generator.codegen.spec.onecx_notification_svc_openapi_yaml.addit
 quarkus.openapi-generator.codegen.spec.onecx_notification_svc_openapi_yaml.enable-security-generation=false
 %prod.quarkus.oidc-client.client-id=${quarkus.application.name}
 %prod.quarkus.rest-client.onecx_ai_svc.providers=io.quarkus.oidc.client.reactive.filter.OidcClientRequestReactiveFilter
+%prod.quarkus.rest-client.onecx_notification_svc.providers=io.quarkus.oidc.client.reactive.filter.OidcClientRequestReactiveFilter
 %prod.quarkus.datasource.jdbc.url=${DB_URL:jdbc:postgresql://postgresdb:5432/onecx-chat?sslmode=disable}
 %prod.quarkus.datasource.username=${DB_USER:onecx-chat}
 %prod.quarkus.datasource.password=${DB_PWD:onecx-chat}
