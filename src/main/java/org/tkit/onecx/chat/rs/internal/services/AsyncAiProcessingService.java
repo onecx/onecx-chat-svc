@@ -5,10 +5,14 @@ import java.util.List;
 import java.util.Objects;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.context.control.ActivateRequestContext;
+import jakarta.enterprise.event.Observes;
+import jakarta.enterprise.event.TransactionPhase;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.core.Response;
 
+import org.eclipse.microprofile.context.ManagedExecutor;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
 import org.tkit.onecx.chat.domain.daos.ChatDAO;
 import org.tkit.onecx.chat.domain.daos.MessageDAO;
@@ -50,6 +54,24 @@ public class AsyncAiProcessingService {
     @RestClient
     NotificationV1Api notificationClient;
 
+    @Inject
+    ManagedExecutor managedExecutor;
+
+    public void onAsyncAiProcessingRequested(
+            @Observes(during = TransactionPhase.AFTER_SUCCESS) AsyncAiProcessingRequest request) {
+        managedExecutor.runAsync(() -> {
+            try {
+                process(request.chatId(), request.messageId(), request.context());
+                log.debug("Async AI processing completed for chatId={}", request.chatId());
+            } catch (Exception ex) {
+                log.error("Async AI response processing failed for chatId={}, messageId={}", request.chatId(),
+                        request.messageId(), ex);
+            }
+        });
+    }
+
+    @ActivateRequestContext
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
     public void process(String chatId, String messageId, RequestContext context) {
         var chat = chatDao.findById(chatId);
         var message = messageDao.findById(messageId);
@@ -79,7 +101,6 @@ public class AsyncAiProcessingService {
         }
     }
 
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
     public void storeAiResponse(String chatId, ChatMessage chatResponse) {
         var managedChat = chatDao.findById(chatId);
         if (managedChat == null) {

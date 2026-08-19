@@ -3,10 +3,10 @@ package org.tkit.onecx.chat.rs.internal.services;
 import java.util.Optional;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 
-import org.eclipse.microprofile.context.ManagedExecutor;
 import org.eclipse.microprofile.context.ThreadContext;
 import org.tkit.onecx.chat.domain.daos.ChatDAO;
 import org.tkit.onecx.chat.domain.daos.MessageDAO;
@@ -15,9 +15,7 @@ import org.tkit.onecx.chat.domain.models.Chat;
 import org.tkit.onecx.chat.domain.models.Message;
 import org.tkit.onecx.chat.domain.models.Participant;
 import org.tkit.onecx.chat.rs.internal.mappers.ChatMapper;
-import org.tkit.onecx.chat.rs.internal.mappers.ExceptionMapper;
 
-import gen.io.github.onecx.ai.clients.model.RequestContext;
 import gen.org.tkit.onecx.chat.rs.internal.model.*;
 import io.smallrye.context.api.ManagedExecutorConfig;
 import lombok.extern.slf4j.Slf4j;
@@ -40,14 +38,11 @@ public class ChatsService {
     ChatMapper mapper;
 
     @Inject
-    ExceptionMapper exceptionMapper;
-
-    @Inject
     ParticipantService participantService;
 
     @Inject
-    @ManagedExecutorConfig(cleared = ThreadContext.ALL_REMAINING, propagated = {})
-    ManagedExecutor managedExecutor;
+    @ManagedExecutorConfig(propagated = ThreadContext.ALL_REMAINING, cleared = ThreadContext.TRANSACTION)
+    Event<AsyncAiProcessingRequest> asyncAiProcessingRequestEvent;
 
     @Inject
     AsyncAiProcessingService asyncAiProcessingService;
@@ -94,21 +89,10 @@ public class ChatsService {
             if (awaitResponse) {
                 asyncAiProcessingService.forwardToAiAndStore(chat, message, aiContext);
             } else {
-                spawnAsyncAiProcessing(chat.getId(), message.getId(), aiContext);
+                asyncAiProcessingRequestEvent.fire(new AsyncAiProcessingRequest(chat.getId(), message.getId(), aiContext));
             }
         }
         return message;
-    }
-
-    private void spawnAsyncAiProcessing(String chatId, String messageId, RequestContext context) {
-        managedExecutor.runAsync(() -> {
-            try {
-                asyncAiProcessingService.process(chatId, messageId, context);
-                log.debug("Async AI processing completed for chatId={}", chatId);
-            } catch (Exception ex) {
-                log.error("Async AI response processing failed for chatId={}, messageId={}", chatId, messageId, ex);
-            }
-        });
     }
 
     @Transactional

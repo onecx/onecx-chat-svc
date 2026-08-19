@@ -64,7 +64,7 @@ class ChatRestControllerAIAsyncTest extends AbstractTest {
                 .withPath("/v1/dispatch/chat")
                 .withMethod(HttpMethod.POST))
                 .withId(MOCK_ID)
-                .respond(httpRequest -> {
+                .respond(_ -> {
                     // Delay dispatch response to prove API returns before AI processing finishes.
                     await().pollDelay(Duration.ofMillis(1500)).until(() -> true);
                     return response().withStatusCode(200)
@@ -121,9 +121,13 @@ class ChatRestControllerAIAsyncTest extends AbstractTest {
                 });
 
         assertThat(immediateMessages).isNotNull().hasSize(1);
-        assertThat(immediateMessages.get(0).getType()).isEqualTo(MessageTypeDTO.HUMAN);
+        assertThat(immediateMessages.getFirst().getType()).isEqualTo(MessageTypeDTO.HUMAN);
 
-        await().atMost(Duration.ofSeconds(20)).untilAsserted(() -> {
+        await().atMost(Duration.ofSeconds(30))
+                .untilAsserted(() -> mockServerClient.verify(dispatchRequestForChatId(chat.getId()),
+                        org.mockserver.verify.VerificationTimes.atLeast(1)));
+
+        await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
             var eventualMessages = given()
                     .auth().oauth2(getKeycloakClientToken("testClient"))
                     .contentType(APPLICATION_JSON)
@@ -137,10 +141,6 @@ class ChatRestControllerAIAsyncTest extends AbstractTest {
             assertThat(eventualMessages).isNotNull().hasSize(2);
             assertThat(eventualMessages.get(1).getType()).isEqualTo(MessageTypeDTO.ASSISTANT);
         });
-
-        await().atMost(Duration.ofSeconds(20))
-                .untilAsserted(() -> mockServerClient.verify(dispatchRequestForChatId(chat.getId()),
-                        org.mockserver.verify.VerificationTimes.atLeast(1)));
     }
 
     private org.mockserver.model.HttpRequest dispatchRequestForChatId(String chatId) {
