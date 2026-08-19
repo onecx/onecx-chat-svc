@@ -591,6 +591,8 @@ components:
       properties:
         filter:
           $ref: '#/components/schemas/ConfigurationFilter'
+        agentId:
+          type: string
         aiContext:
           type: array
           items:
