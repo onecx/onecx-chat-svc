@@ -2,6 +2,8 @@ package org.tkit.onecx.chat.rs.internal.clients;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.ArrayList;
+
 import jakarta.ws.rs.core.MultivaluedHashMap;
 
 import org.junit.jupiter.api.Test;
@@ -76,5 +78,67 @@ class AiServiceClientHeadersFactoryTest {
 
         assertThat(result.containsKey(ApmPrincipalTokenContext.HEADER_NAME)).isFalse();
         assertThat(result.containsKey(AiServiceClientHeadersFactory.USER_AUTHORIZATION_HEADER_NAME)).isFalse();
+    }
+
+    @Test
+    void shouldAddIncomingValueWhenNotBlank() {
+        var incomingHeaders = new MultivaluedHashMap<String, String>();
+        incomingHeaders.putSingle(ApmPrincipalTokenContext.HEADER_NAME, "valid-apm-token");
+
+        var result = factory.update(incomingHeaders, new MultivaluedHashMap<>());
+
+        assertThat(result.getFirst(ApmPrincipalTokenContext.HEADER_NAME)).isEqualTo("valid-apm-token");
+    }
+
+    @Test
+    void shouldNotAddHeaderWhenIncomingIsNullAndFallbackIsBlank() {
+        var result = factory.update(new MultivaluedHashMap<>(), new MultivaluedHashMap<>());
+
+        assertThat(result.containsKey(ApmPrincipalTokenContext.HEADER_NAME)).isFalse();
+        assertThat(result.containsKey(AiServiceClientHeadersFactory.USER_AUTHORIZATION_HEADER_NAME)).isFalse();
+    }
+
+    @Test
+    void shouldUseFallbackWhenIncomingIsNullButFallbackIsValid() {
+        try (var _ = ApmPrincipalTokenContext.withToken("fallback-apm-token")) {
+            var incomingHeaders = new MultivaluedHashMap<String, String>();
+
+            var result = factory.update(incomingHeaders, new MultivaluedHashMap<>());
+
+            assertThat(result.getFirst(ApmPrincipalTokenContext.HEADER_NAME)).isEqualTo("fallback-apm-token");
+        }
+    }
+
+    @Test
+    void shouldUseFallbackWhenIncomingIsBlankButFallbackIsValid() {
+        try (var _ = AiServiceUserAuthorizationContext.withHeader("Bearer fallback-user")) {
+            var incomingHeaders = new MultivaluedHashMap<String, String>();
+            incomingHeaders.putSingle(AiServiceClientHeadersFactory.USER_AUTHORIZATION_HEADER_NAME, "   ");
+
+            var result = factory.update(incomingHeaders, new MultivaluedHashMap<>());
+
+            assertThat(result.getFirst(AiServiceClientHeadersFactory.USER_AUTHORIZATION_HEADER_NAME))
+                    .isEqualTo("Bearer fallback-user");
+        }
+    }
+
+    @Test
+    void shouldNotAddHeaderWhenBothIncomingAndFallbackAreBlank() {
+        var incomingHeaders = new MultivaluedHashMap<String, String>();
+        incomingHeaders.putSingle(ApmPrincipalTokenContext.HEADER_NAME, "   ");
+
+        var result = factory.update(incomingHeaders, new MultivaluedHashMap<>());
+
+        assertThat(result.containsKey(ApmPrincipalTokenContext.HEADER_NAME)).isFalse();
+    }
+
+    @Test
+    void shouldHandleEmptyHeadersList() {
+        var incomingHeaders = new MultivaluedHashMap<String, String>();
+        incomingHeaders.put(ApmPrincipalTokenContext.HEADER_NAME, new ArrayList<>());
+
+        var result = factory.update(incomingHeaders, new MultivaluedHashMap<>());
+
+        assertThat(result.containsKey(ApmPrincipalTokenContext.HEADER_NAME)).isFalse();
     }
 }

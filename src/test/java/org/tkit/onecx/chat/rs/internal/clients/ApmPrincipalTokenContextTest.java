@@ -80,4 +80,53 @@ class ApmPrincipalTokenContextTest {
 
         assertThat(ApmPrincipalTokenContext.getToken()).isNull();
     }
+
+    @Test
+    void shouldRestoreNonBlankPreviousTokenWhenExitingInnerScope() {
+        try (var _ = ApmPrincipalTokenContext.withToken("outer-token")) {
+            assertThat(ApmPrincipalTokenContext.getToken()).isEqualTo("outer-token");
+
+            try (var _ = ApmPrincipalTokenContext.withToken("inner-token")) {
+                assertThat(ApmPrincipalTokenContext.getToken()).isEqualTo("inner-token");
+            }
+
+            // This line exercises the else branch: if (previous != null && !previous.isBlank())
+            assertThat(ApmPrincipalTokenContext.getToken()).isEqualTo("outer-token");
+        }
+    }
+
+    @Test
+    void shouldRestoreBlankPreviousTokenByRemoving() {
+        try (var _ = ApmPrincipalTokenContext.withToken("   ")) {
+            assertThat(ApmPrincipalTokenContext.getToken()).isNull();
+
+            try (var _ = ApmPrincipalTokenContext.withToken("inner-token")) {
+                assertThat(ApmPrincipalTokenContext.getToken()).isEqualTo("inner-token");
+            }
+
+            // This line exercises the if branch: if (previous == null || previous.isBlank())
+            assertThat(ApmPrincipalTokenContext.getToken()).isNull();
+        }
+    }
+
+    @Test
+    void shouldHandleMultipleNestedScopes() {
+        try (var _ = ApmPrincipalTokenContext.withToken("level1")) {
+            assertThat(ApmPrincipalTokenContext.getToken()).isEqualTo("level1");
+
+            try (var _ = ApmPrincipalTokenContext.withToken("level2")) {
+                assertThat(ApmPrincipalTokenContext.getToken()).isEqualTo("level2");
+
+                try (var _ = ApmPrincipalTokenContext.withToken("level3")) {
+                    assertThat(ApmPrincipalTokenContext.getToken()).isEqualTo("level3");
+                }
+
+                assertThat(ApmPrincipalTokenContext.getToken()).isEqualTo("level2");
+            }
+
+            assertThat(ApmPrincipalTokenContext.getToken()).isEqualTo("level1");
+        }
+
+        assertThat(ApmPrincipalTokenContext.getToken()).isNull();
+    }
 }

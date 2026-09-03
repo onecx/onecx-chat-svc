@@ -6,6 +6,9 @@ import jakarta.ws.rs.core.MultivaluedHashMap;
 
 import org.junit.jupiter.api.Test;
 
+import io.quarkus.test.junit.QuarkusTest;
+
+@QuarkusTest
 class ApmPrincipalTokenClientHeadersFactoryTest {
 
     private final ApmPrincipalTokenClientHeadersFactory factory = new ApmPrincipalTokenClientHeadersFactory();

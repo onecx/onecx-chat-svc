@@ -80,4 +80,53 @@ class AiServiceUserAuthorizationContextTest {
 
         assertThat(AiServiceUserAuthorizationContext.getHeader()).isNull();
     }
+
+    @Test
+    void shouldRestoreNonBlankPreviousHeaderWhenExitingInnerScope() {
+        try (var _ = AiServiceUserAuthorizationContext.withHeader("Bearer outer-token")) {
+            assertThat(AiServiceUserAuthorizationContext.getHeader()).isEqualTo("Bearer outer-token");
+
+            try (var _ = AiServiceUserAuthorizationContext.withHeader("Bearer inner-token")) {
+                assertThat(AiServiceUserAuthorizationContext.getHeader()).isEqualTo("Bearer inner-token");
+            }
+
+            // This line exercises the else branch: if (previous != null && !previous.isBlank())
+            assertThat(AiServiceUserAuthorizationContext.getHeader()).isEqualTo("Bearer outer-token");
+        }
+    }
+
+    @Test
+    void shouldRestoreBlankPreviousHeaderByRemoving() {
+        try (var _ = AiServiceUserAuthorizationContext.withHeader("   ")) {
+            assertThat(AiServiceUserAuthorizationContext.getHeader()).isNull();
+
+            try (var _ = AiServiceUserAuthorizationContext.withHeader("Bearer inner-token")) {
+                assertThat(AiServiceUserAuthorizationContext.getHeader()).isEqualTo("Bearer inner-token");
+            }
+
+            // This line exercises the if branch: if (previous == null || previous.isBlank())
+            assertThat(AiServiceUserAuthorizationContext.getHeader()).isNull();
+        }
+    }
+
+    @Test
+    void shouldHandleMultipleNestedScopes() {
+        try (var _ = AiServiceUserAuthorizationContext.withHeader("Bearer level1")) {
+            assertThat(AiServiceUserAuthorizationContext.getHeader()).isEqualTo("Bearer level1");
+
+            try (var _ = AiServiceUserAuthorizationContext.withHeader("Bearer level2")) {
+                assertThat(AiServiceUserAuthorizationContext.getHeader()).isEqualTo("Bearer level2");
+
+                try (var _ = AiServiceUserAuthorizationContext.withHeader("Bearer level3")) {
+                    assertThat(AiServiceUserAuthorizationContext.getHeader()).isEqualTo("Bearer level3");
+                }
+
+                assertThat(AiServiceUserAuthorizationContext.getHeader()).isEqualTo("Bearer level2");
+            }
+
+            assertThat(AiServiceUserAuthorizationContext.getHeader()).isEqualTo("Bearer level1");
+        }
+
+        assertThat(AiServiceUserAuthorizationContext.getHeader()).isNull();
+    }
 }
