@@ -11,6 +11,7 @@ import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.UriInfo;
 
@@ -23,6 +24,8 @@ import org.tkit.onecx.chat.domain.daos.ParticipantDAO;
 import org.tkit.onecx.chat.domain.models.Chat;
 import org.tkit.onecx.chat.domain.models.Message;
 import org.tkit.onecx.chat.domain.models.Participant;
+import org.tkit.onecx.chat.rs.internal.clients.AiServiceClientHeadersFactory;
+import org.tkit.onecx.chat.rs.internal.clients.ApmPrincipalTokenContext;
 import org.tkit.onecx.chat.rs.internal.mappers.ChatMapper;
 import org.tkit.onecx.chat.rs.internal.mappers.ExceptionMapper;
 import org.tkit.onecx.chat.rs.internal.services.ChatsService;
@@ -56,6 +59,9 @@ public class ChatsRestController implements ChatsInternalApi {
 
     @Context
     UriInfo uriInfo;
+
+    @Context
+    HttpHeaders httpHeaders;
 
     @Override
     public Response createChat(CreateChatDTO createChatDTO) {
@@ -116,7 +122,9 @@ public class ChatsRestController implements ChatsInternalApi {
             return Response.status(Response.Status.NOT_FOUND).build();
         }
 
-        Message message = service.createChatMessage(chat, createMessageDTO);
+        Message message = service.createChatMessage(chat, createMessageDTO,
+                httpHeaders.getHeaderString(ApmPrincipalTokenContext.HEADER_NAME),
+                httpHeaders.getHeaderString(AiServiceClientHeadersFactory.USER_AUTHORIZATION_HEADER_NAME));
         boolean awaitResponse = !Boolean.FALSE.equals(createMessageDTO.getAwaitResponse());
         var location = uriInfo.getAbsolutePathBuilder().path(message.getId()).build();
 

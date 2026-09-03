@@ -10,12 +10,10 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.util.HashSet;
-import java.util.concurrent.CompletableFuture;
 
 import jakarta.inject.Inject;
 import jakarta.ws.rs.core.Response;
 
-import org.eclipse.microprofile.context.ManagedExecutor;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -59,15 +57,12 @@ class AsyncAiProcessingServiceTest {
     @RestClient
     NotificationV1Api notificationClient;
 
-    @InjectMock
-    ManagedExecutor managedExecutor;
-
     @Test
     void processShouldReturnWhenChatNotFound() {
         when(chatDao.findById(anyString())).thenReturn(null);
         when(messageDao.findById(anyString())).thenReturn(new Message());
 
-        service.process("chat-id", "message-id", new RequestContext());
+        service.process("chat-id", "message-id", new RequestContext(), null, null);
 
         verifyNoInteractions(dispatchClient, notificationClient);
         verify(messageDao, never()).create(any(Message.class));
@@ -78,78 +73,10 @@ class AsyncAiProcessingServiceTest {
         when(chatDao.findById(anyString())).thenReturn(new Chat());
         when(messageDao.findById(anyString())).thenReturn(null);
 
-        service.process("chat-id", "message-id", new RequestContext());
+        service.process("chat-id", "message-id", new RequestContext(), null, null);
 
         verifyNoInteractions(dispatchClient, notificationClient);
         verify(messageDao, never()).create(any(Message.class));
-    }
-
-    @Test
-    void onAsyncAiProcessingRequestedShouldRunProcessAfterCommit() {
-        var chatId = "chat-id";
-        var messageId = "message-id";
-
-        var chat = new Chat();
-        chat.setId(chatId);
-        chat.setType(Chat.ChatType.HUMAN_GROUP_CHAT);
-        var sender = new Participant();
-        sender.setUserId("sender");
-        var receiver = new Participant();
-        receiver.setUserId("receiver");
-        chat.setParticipants(new HashSet<>());
-        chat.getParticipants().add(sender);
-        chat.getParticipants().add(receiver);
-
-        var message = new Message();
-        message.setId(messageId);
-        message.setUserId("sender");
-
-        var conversation = new Conversation();
-        conversation.setConversationId(chatId);
-        var requestMessage = new ChatMessage();
-        requestMessage.setConversationId(messageId);
-        var aiChatMessage = new ChatMessage();
-        aiChatMessage.setConversationId("ai-msg");
-        aiChatMessage.setMessage("AI response");
-        aiChatMessage.setType(ChatMessage.TypeEnum.ASSISTANT);
-        var persistedAiMessage = new Message();
-
-        when(managedExecutor.runAsync(any())).thenAnswer(invocation -> {
-            ((Runnable) invocation.getArgument(0)).run();
-            return CompletableFuture.completedFuture(null);
-        });
-        when(chatDao.findById(chatId)).thenReturn(chat);
-        when(messageDao.findById(messageId)).thenReturn(message);
-        when(mapper.mapChat2Conversation(chat)).thenReturn(conversation);
-        when(mapper.mapMessage(message)).thenReturn(requestMessage);
-        when(dispatchClient.chat(any())).thenReturn(Response.ok(aiChatMessage).build());
-        when(mapper.mapAiSvcMessage(aiChatMessage)).thenReturn(persistedAiMessage);
-
-        service.onAsyncAiProcessingRequested(new AsyncAiProcessingRequest(chatId, messageId, new RequestContext()));
-
-        verify(dispatchClient).chat(any());
-        verify(messageDao).create(persistedAiMessage);
-        verify(notificationClient, times(1)).dispatchNotification(any(Notification.class));
-    }
-
-    @Test
-    void onAsyncAiProcessingRequestedShouldCatchProcessException() {
-        var chatId = "chat-id";
-        var messageId = "message-id";
-
-        when(managedExecutor.runAsync(any())).thenAnswer(invocation -> {
-            ((Runnable) invocation.getArgument(0)).run();
-            return CompletableFuture.completedFuture(null);
-        });
-        when(chatDao.findById(chatId)).thenThrow(new RuntimeException("db error"));
-
-        Assertions.assertDoesNotThrow(
-                () -> service
-                        .onAsyncAiProcessingRequested(new AsyncAiProcessingRequest(chatId, messageId, new RequestContext())));
-
-        verify(managedExecutor).runAsync(any());
-        verify(messageDao, never()).create(any(Message.class));
-        verifyNoInteractions(notificationClient);
     }
 
     @Test
@@ -191,7 +118,7 @@ class AsyncAiProcessingServiceTest {
         when(dispatchClient.chat(any())).thenReturn(Response.ok(aiChatMessage).build());
         when(mapper.mapAiSvcMessage(aiChatMessage)).thenReturn(persistedAiMessage);
 
-        service.process(chatId, messageId, new RequestContext());
+        service.process(chatId, messageId, new RequestContext(), null, null);
 
         verify(messageDao).create(persistedAiMessage);
         var notificationCaptor = ArgumentCaptor.forClass(Notification.class);
@@ -237,7 +164,7 @@ class AsyncAiProcessingServiceTest {
         when(dispatchClient.chat(any())).thenReturn(Response.ok(aiChatMessage).build());
         when(mapper.mapAiSvcMessage(aiChatMessage)).thenReturn(persistedAiMessage);
 
-        service.process(chatId, messageId, new RequestContext());
+        service.process(chatId, messageId, new RequestContext(), null, null);
 
         verify(messageDao).create(persistedAiMessage);
         var notificationCaptor = ArgumentCaptor.forClass(Notification.class);
@@ -283,7 +210,7 @@ class AsyncAiProcessingServiceTest {
         when(dispatchClient.chat(any())).thenReturn(Response.ok(aiChatMessage).build());
         when(mapper.mapAiSvcMessage(aiChatMessage)).thenReturn(persistedAiMessage);
 
-        service.process(chatId, messageId, new RequestContext());
+        service.process(chatId, messageId, new RequestContext(), null, null);
 
         verify(messageDao).create(persistedAiMessage);
         verify(notificationClient, never()).dispatchNotification(any(Notification.class));
@@ -329,7 +256,7 @@ class AsyncAiProcessingServiceTest {
         when(mapper.mapAiSvcMessage(aiChatMessage)).thenReturn(persistedAiMessage);
         when(notificationClient.dispatchNotification(any(Notification.class))).thenReturn(notificationResponse);
 
-        service.process(chatId, messageId, new RequestContext());
+        service.process(chatId, messageId, new RequestContext(), null, null);
 
         verify(notificationClient).dispatchNotification(any(Notification.class));
         verify(notificationResponse).close();

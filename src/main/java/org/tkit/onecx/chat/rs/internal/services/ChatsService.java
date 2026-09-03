@@ -7,7 +7,6 @@ import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 
-import org.eclipse.microprofile.context.ThreadContext;
 import org.tkit.onecx.chat.domain.daos.ChatDAO;
 import org.tkit.onecx.chat.domain.daos.MessageDAO;
 import org.tkit.onecx.chat.domain.daos.ParticipantDAO;
@@ -17,7 +16,6 @@ import org.tkit.onecx.chat.domain.models.Participant;
 import org.tkit.onecx.chat.rs.internal.mappers.ChatMapper;
 
 import gen.org.tkit.onecx.chat.rs.internal.model.*;
-import io.smallrye.context.api.ManagedExecutorConfig;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -41,7 +39,6 @@ public class ChatsService {
     ParticipantService participantService;
 
     @Inject
-    @ManagedExecutorConfig(propagated = ThreadContext.ALL_REMAINING, cleared = ThreadContext.TRANSACTION)
     Event<AsyncAiProcessingRequest> asyncAiProcessingRequestEvent;
 
     @Inject
@@ -76,7 +73,8 @@ public class ChatsService {
     }
 
     @Transactional
-    public Message createChatMessage(Chat chat, CreateMessageDTO createMessageDTO) {
+    public Message createChatMessage(Chat chat, CreateMessageDTO createMessageDTO, String apmPrincipalToken,
+            String userAuthorization) {
         var message = mapper.createMessage(createMessageDTO);
         message.setChat(chat);
         message = msgDao.create(message);
@@ -87,9 +85,12 @@ public class ChatsService {
 
         if (shouldForwardToAiService(chat.getType(), skipAiProcessing)) {
             if (awaitResponse) {
-                asyncAiProcessingService.forwardToAiAndStore(chat, message, aiContext);
+                asyncAiProcessingService.forwardToAiAndStore(chat, message, aiContext, apmPrincipalToken,
+                        userAuthorization);
             } else {
-                asyncAiProcessingRequestEvent.fire(new AsyncAiProcessingRequest(chat.getId(), message.getId(), aiContext));
+                asyncAiProcessingRequestEvent
+                        .fire(new AsyncAiProcessingRequest(chat.getId(), message.getId(), aiContext, apmPrincipalToken,
+                                userAuthorization));
             }
         }
         return message;

@@ -42,6 +42,8 @@ class ChatsServiceTest {
 
     @Test
     void createChatMessageAsyncShouldPublishProcessingEventTest() {
+        var apmPrincipalToken = "apm-token";
+        var userAuthorization = "user-authz";
         var chat = new Chat();
         chat.setId("chat-id");
         chat.setType(Chat.ChatType.AI_CHAT);
@@ -68,12 +70,14 @@ class ChatsServiceTest {
         requestContext.setFilter(new AgentFilter().key(AgentFilter.KeyEnum.APP_ID).value("test"));
         when(mapper.mapContext(requestContextDTO)).thenReturn(requestContext);
 
-        var result = Assertions.assertDoesNotThrow(() -> service.createChatMessage(chat, dto));
+        var result = Assertions
+                .assertDoesNotThrow(() -> service.createChatMessage(chat, dto, apmPrincipalToken, userAuthorization));
 
         Assertions.assertNotNull(result);
         Assertions.assertEquals("msg-id", result.getId());
         await().atMost(Duration.ofSeconds(2))
                 .untilAsserted(() -> verify(asyncAiProcessingRequestEvent)
-                        .fire(new AsyncAiProcessingRequest("chat-id", "msg-id", requestContext)));
+                        .fire(new AsyncAiProcessingRequest("chat-id", "msg-id", requestContext, apmPrincipalToken,
+                                userAuthorization)));
     }
 }
