@@ -2,6 +2,8 @@ package org.tkit.onecx.chat.rs.internal.clients;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.lang.reflect.Field;
+
 import org.junit.jupiter.api.Test;
 
 import io.quarkus.test.junit.QuarkusTest;
@@ -90,7 +92,6 @@ class AiServiceUserAuthorizationContextTest {
                 assertThat(AiServiceUserAuthorizationContext.getHeader()).isEqualTo("Bearer inner-token");
             }
 
-            // This line exercises the else branch: if (previous != null && !previous.isBlank())
             assertThat(AiServiceUserAuthorizationContext.getHeader()).isEqualTo("Bearer outer-token");
         }
     }
@@ -104,7 +105,6 @@ class AiServiceUserAuthorizationContextTest {
                 assertThat(AiServiceUserAuthorizationContext.getHeader()).isEqualTo("Bearer inner-token");
             }
 
-            // This line exercises the if branch: if (previous == null || previous.isBlank())
             assertThat(AiServiceUserAuthorizationContext.getHeader()).isNull();
         }
     }
@@ -128,5 +128,26 @@ class AiServiceUserAuthorizationContextTest {
         }
 
         assertThat(AiServiceUserAuthorizationContext.getHeader()).isNull();
+    }
+
+    @Test
+    void shouldRemoveWhenPreviousHeaderIsBlank() throws Exception {
+        var holder = getThreadLocal(AiServiceUserAuthorizationContext.class, "HOLDER");
+        holder.set("   ");
+        try {
+            try (var _ = AiServiceUserAuthorizationContext.withHeader("Bearer inner")) {
+                assertThat(AiServiceUserAuthorizationContext.getHeader()).isEqualTo("Bearer inner");
+            }
+            assertThat(AiServiceUserAuthorizationContext.getHeader()).isNull();
+        } finally {
+            holder.remove();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static ThreadLocal<String> getThreadLocal(Class<?> owner, String fieldName) throws Exception {
+        Field field = owner.getDeclaredField(fieldName);
+        field.setAccessible(true);
+        return (ThreadLocal<String>) field.get(null);
     }
 }

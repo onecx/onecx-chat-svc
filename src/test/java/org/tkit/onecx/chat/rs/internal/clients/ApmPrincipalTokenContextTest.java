@@ -2,6 +2,8 @@ package org.tkit.onecx.chat.rs.internal.clients;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.lang.reflect.Field;
+
 import org.junit.jupiter.api.Test;
 
 import io.quarkus.test.junit.QuarkusTest;
@@ -90,7 +92,6 @@ class ApmPrincipalTokenContextTest {
                 assertThat(ApmPrincipalTokenContext.getToken()).isEqualTo("inner-token");
             }
 
-            // This line exercises the else branch: if (previous != null && !previous.isBlank())
             assertThat(ApmPrincipalTokenContext.getToken()).isEqualTo("outer-token");
         }
     }
@@ -104,7 +105,6 @@ class ApmPrincipalTokenContextTest {
                 assertThat(ApmPrincipalTokenContext.getToken()).isEqualTo("inner-token");
             }
 
-            // This line exercises the if branch: if (previous == null || previous.isBlank())
             assertThat(ApmPrincipalTokenContext.getToken()).isNull();
         }
     }
@@ -128,5 +128,26 @@ class ApmPrincipalTokenContextTest {
         }
 
         assertThat(ApmPrincipalTokenContext.getToken()).isNull();
+    }
+
+    @Test
+    void shouldRemoveWhenPreviousTokenIsBlank() throws Exception {
+        var holder = getThreadLocal(ApmPrincipalTokenContext.class, "HOLDER");
+        holder.set("   ");
+        try {
+            try (var _ = ApmPrincipalTokenContext.withToken("inner")) {
+                assertThat(ApmPrincipalTokenContext.getToken()).isEqualTo("inner");
+            }
+            assertThat(ApmPrincipalTokenContext.getToken()).isNull();
+        } finally {
+            holder.remove();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static ThreadLocal<String> getThreadLocal(Class<?> owner, String fieldName) throws Exception {
+        Field field = owner.getDeclaredField(fieldName);
+        field.setAccessible(true);
+        return (ThreadLocal<String>) field.get(null);
     }
 }

@@ -2,6 +2,7 @@ package org.tkit.onecx.chat.rs.internal.clients;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 
 import jakarta.ws.rs.core.MultivaluedHashMap;
@@ -140,5 +141,24 @@ class AiServiceClientHeadersFactoryTest {
         var result = factory.update(incomingHeaders, new MultivaluedHashMap<>());
 
         assertThat(result.containsKey(ApmPrincipalTokenContext.HEADER_NAME)).isFalse();
+    }
+
+    @Test
+    void shouldNotAddHeaderWhenFallbackIsBlankString() throws Exception {
+        var holder = getThreadLocal(ApmPrincipalTokenContext.class, "HOLDER");
+        holder.set("   ");
+        try {
+            var result = factory.update(new MultivaluedHashMap<>(), new MultivaluedHashMap<>());
+            assertThat(result.containsKey(ApmPrincipalTokenContext.HEADER_NAME)).isFalse();
+        } finally {
+            holder.remove();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static ThreadLocal<String> getThreadLocal(Class<?> owner, String fieldName) throws Exception {
+        Field field = owner.getDeclaredField(fieldName);
+        field.setAccessible(true);
+        return (ThreadLocal<String>) field.get(null);
     }
 }
