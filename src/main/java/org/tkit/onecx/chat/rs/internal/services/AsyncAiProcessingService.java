@@ -103,8 +103,8 @@ public class AsyncAiProcessingService {
         chatRequest.conversation(conversation);
         chatRequest.setRequestContext(context);
 
-        try (var ignored = ApmPrincipalTokenContext.withToken(apmPrincipalToken);
-                var ignoredUserAuthorization = AiServiceUserAuthorizationContext.withHeader(userAuthorization);
+        try (var _ = ApmPrincipalTokenContext.withToken(apmPrincipalToken);
+                var _ = AiServiceUserAuthorizationContext.withHeader(userAuthorization);
                 Response response = dispatchClient.chat(chatRequest)) {
             var chatResponse = response.readEntity(ChatMessage.class);
             storeAiResponse(chat.getId(), chatResponse);
@@ -124,7 +124,7 @@ public class AsyncAiProcessingService {
     }
 
     private void notifyAsyncAiResponseReady(Chat chat, Message message, String apmPrincipalToken) {
-        try (var ignored = ApmPrincipalTokenContext.withToken(apmPrincipalToken)) {
+        try (var _ = ApmPrincipalTokenContext.withToken(apmPrincipalToken)) {
             List<ContentMeta> contentMetaList = new ArrayList<>();
             contentMetaList.add(new ContentMeta().key("chatId").value(chat.getId()));
             contentMetaList.add(new ContentMeta().key("type").value("update_chat"));
