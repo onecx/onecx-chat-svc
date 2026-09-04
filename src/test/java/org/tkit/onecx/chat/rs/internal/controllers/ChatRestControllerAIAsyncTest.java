@@ -54,6 +54,8 @@ class ChatRestControllerAIAsyncTest extends AbstractTest {
 
     @Test
     void createChatMessageShouldReturnAcceptedWhenAwaitResponseFalseTest() {
+        var apmPrincipalToken = createToken("org1");
+        var userAuthorization = "Bearer user-token";
 
         ChatMessage chatMessage = new ChatMessage();
         chatMessage.setConversationId("123456");
@@ -78,6 +80,8 @@ class ChatRestControllerAIAsyncTest extends AbstractTest {
 
         var chat = given()
                 .auth().oauth2(getKeycloakClientToken("testClient"))
+                .header(APM_HEADER_PARAM, apmPrincipalToken)
+                .header(USER_AUTHORIZATION_HEADER_PARAM, userAuthorization)
                 .when()
                 .contentType(APPLICATION_JSON)
                 .body(chatDto)
@@ -99,6 +103,8 @@ class ChatRestControllerAIAsyncTest extends AbstractTest {
         long startedAt = System.currentTimeMillis();
         given()
                 .auth().oauth2(getKeycloakClientToken("testClient"))
+                .header(APM_HEADER_PARAM, apmPrincipalToken)
+                .header(USER_AUTHORIZATION_HEADER_PARAM, userAuthorization)
                 .pathParam("chatId", chat.getId())
                 .when()
                 .contentType(APPLICATION_JSON)
@@ -112,6 +118,8 @@ class ChatRestControllerAIAsyncTest extends AbstractTest {
 
         var immediateMessages = given()
                 .auth().oauth2(getKeycloakClientToken("testClient"))
+                .header(APM_HEADER_PARAM, apmPrincipalToken)
+                .header(USER_AUTHORIZATION_HEADER_PARAM, userAuthorization)
                 .contentType(APPLICATION_JSON)
                 .pathParam("chatId", chat.getId())
                 .get("{chatId}/messages")
@@ -124,12 +132,15 @@ class ChatRestControllerAIAsyncTest extends AbstractTest {
         assertThat(immediateMessages.getFirst().getType()).isEqualTo(MessageTypeDTO.HUMAN);
 
         await().atMost(Duration.ofSeconds(30))
-                .untilAsserted(() -> mockServerClient.verify(dispatchRequestForChatId(chat.getId()),
-                        org.mockserver.verify.VerificationTimes.atLeast(1)));
+                .untilAsserted(() -> mockServerClient
+                        .verify(dispatchRequestForChatId(chat.getId(), apmPrincipalToken, userAuthorization),
+                                org.mockserver.verify.VerificationTimes.atLeast(1)));
 
         await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
             var eventualMessages = given()
                     .auth().oauth2(getKeycloakClientToken("testClient"))
+                    .header(APM_HEADER_PARAM, apmPrincipalToken)
+                    .header(USER_AUTHORIZATION_HEADER_PARAM, userAuthorization)
                     .contentType(APPLICATION_JSON)
                     .pathParam("chatId", chat.getId())
                     .get("{chatId}/messages")
@@ -143,10 +154,13 @@ class ChatRestControllerAIAsyncTest extends AbstractTest {
         });
     }
 
-    private org.mockserver.model.HttpRequest dispatchRequestForChatId(String chatId) {
+    private org.mockserver.model.HttpRequest dispatchRequestForChatId(String chatId, String apmPrincipalToken,
+            String userAuthorization) {
         return request()
                 .withPath("/v1/dispatch/chat")
                 .withMethod(HttpMethod.POST)
+                .withHeader(APM_HEADER_PARAM, apmPrincipalToken)
+                .withHeader(USER_AUTHORIZATION_HEADER_PARAM, userAuthorization)
                 .withBody(JsonBody.json("""
                         {
                           "conversation": {
