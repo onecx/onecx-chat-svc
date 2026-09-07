@@ -40,6 +40,11 @@ public interface ExceptionMapper {
         return RestResponse.status(Response.Status.BAD_REQUEST, dto);
     }
 
+    default RestResponse<ProblemDetailResponseDTO> genericException(Exception ex) {
+        ProblemDetailResponseDTO dto = exception("INTERNAL_SERVER_ERROR", ex.getMessage());
+        return RestResponse.status(Response.Status.INTERNAL_SERVER_ERROR, dto);
+    }
+
     @Mapping(target = "removeParamsItem", ignore = true)
     @Mapping(target = "params", ignore = true)
     @Mapping(target = "invalidParams", ignore = true)

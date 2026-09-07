@@ -1,0 +1,28 @@
+= Conversation Entries
+
+== Overview
+
+Conversation Entries are a sequence-ordered, idempotent-write persistence model that lives alongside (and does not replace) the existing `Message` model. Authenticated internal runtimes use them to durably record finalized human speech (`HUMAN_UTTERANCE`), cumulative assistant checkpoints (`ASSISTANT_CHECKPOINT`), and terminal outcomes (`TERMINAL_OUTCOME`) for a chat.
+
+== Lifecycle
+
+* Creation happens via `POST /internal/chats/{chatId}/conversation-entries` with a required `idempotencyKey`.
+* The first write allocates a stable `sequenceNumber` (`MAX(sequenceNumber) + 1` for the chat) that subsequent updates never change.
+* Entries start in `IN_PROGRESS` status.
+* While `IN_PROGRESS`, repeated writes with identical `text` are no-ops (`200 OK`, unchanged state).
+* Writes whose `text` extends the stored text as a prefix update the row in place (cumulative/monotonic growth).
+* Writes whose `text` does not extend the stored text are rejected with `409 Conflict`.
+* Setting `status` to `COMPLETED` or `INTERRUPTED` finalizes the entry exactly once.
+* Once terminal, the entry is immutable and any further write for that `idempotencyKey` returns `409 Conflict`.
+* Omitting `text` (i.e. `text: null`) in a request is treated as "no text change requested" — the stored cumulative text is left as-is. This lets a caller finalize an entry's `status` (`COMPLETED`/`INTERRUPTED`) without resending the full cumulative text.
+
+== Replay Contract
+
+* `GET /internal/chats/{chatId}/conversation-entries` returns only entries with terminal status (`COMPLETED` or `INTERRUPTED`), ordered ascending by `sequenceNumber`.
+* Entries with `IN_PROGRESS` status are never returned.
+* The endpoint returns `404` when the `chatId` does not resolve to a chat visible to the caller's tenant.
+
+== Authorization
+
+* Endpoints require OAuth2 scopes `ocx-chat-entries:write` (create/update) and `ocx-chat-entries:read` (replay), or the blanket `ocx-chat:all` scope.
+* Tenant isolation is enforced transparently via Hibernate discriminator-based multi-tenancy (`quarkus.hibernate-orm.multitenant=DISCRIMINATOR`), so a chat belonging to another tenant is treated as not found.

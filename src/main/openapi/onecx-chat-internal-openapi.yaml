@@ -8,6 +8,7 @@ servers:
 tags:
   - name: chatsInternal
   - name: messagesInternal
+  - name: conversationEntriesInternal
 paths:
   /internal/chats/{chatId}/messages:
     get:
@@ -129,6 +130,93 @@ paths:
                 $ref: '#/components/schemas/Participant'
         "400":
           description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetailResponse'
+  /internal/chats/{chatId}/conversation-entries:
+    post:
+      security:
+        - oauth2: [ ocx-chat:all, ocx-chat-entries:write ]
+      tags:
+        - conversationEntriesInternal
+      description: creates or updates a Conversation Entry using an idempotency key
+      operationId: createOrUpdateConversationEntry
+      parameters:
+        - name: chatId
+          in: path
+          required: true
+          description: The ID of the chat
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrUpdateConversationEntry'
+      responses:
+        "200":
+          description: Conversation entry updated or unchanged (no-op)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationEntry'
+        "201":
+          description: New conversation entry created
+          headers:
+            Location:
+              required: true
+              schema:
+                type: string
+                format: url
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationEntry'
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetailResponse'
+        "404":
+          description: Chat not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetailResponse'
+        "409":
+          description: Conflict - incompatible retry or terminal immutability violation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetailResponse'
+    get:
+      security:
+        - oauth2: [ ocx-chat:all, ocx-chat-entries:read ]
+      tags:
+        - conversationEntriesInternal
+      description: Replay visible terminal conversation entries for a chat in sequence order
+      operationId: getConversationEntries
+      parameters:
+        - name: chatId
+          in: path
+          required: true
+          description: The ID of the chat
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ConversationEntry'
+        "404":
+          description: Chat not found
           content:
             application/json:
               schema:
@@ -332,6 +420,8 @@ components:
             ocx-chat:read: Grants read access
             ocx-chat:write: Grants write access
             ocx-chat:delete: Grants access to delete operations
+            ocx-chat-entries:write: Grants write access to conversation entries
+            ocx-chat-entries:read: Grants read access to conversation entries
 
   schemas:
     ChatType:
@@ -493,6 +583,65 @@ components:
           $ref: '#/components/schemas/MessageType'
         text:
           type: string
+        userId:
+          type: string
+    ConversationEntryType:
+      type: string
+      enum:
+        - HUMAN_UTTERANCE
+        - ASSISTANT_CHECKPOINT
+        - TERMINAL_OUTCOME
+    ConversationEntryStatus:
+      type: string
+      enum:
+        - IN_PROGRESS
+        - COMPLETED
+        - INTERRUPTED
+    ConversationEntry:
+      type: object
+      properties:
+        version:
+          format: int32
+          type: integer
+        creationDate:
+          $ref: '#/components/schemas/OffsetDateTime'
+        creationUser:
+          type: string
+        modificationDate:
+          $ref: '#/components/schemas/OffsetDateTime'
+        modificationUser:
+          type: string
+        id:
+          type: string
+        chatId:
+          type: string
+        idempotencyKey:
+          type: string
+        sequenceNumber:
+          format: int64
+          type: integer
+        entryType:
+          $ref: '#/components/schemas/ConversationEntryType'
+        text:
+          type: string
+        status:
+          $ref: '#/components/schemas/ConversationEntryStatus'
+        userId:
+          type: string
+    CreateOrUpdateConversationEntry:
+      required:
+        - idempotencyKey
+        - entryType
+      type: object
+      properties:
+        idempotencyKey:
+          type: string
+        entryType:
+          $ref: '#/components/schemas/ConversationEntryType'
+        text:
+          type: string
+        status:
+          $ref: '#/components/schemas/ConversationEntryStatus'
         userId:
           type: string
     Participant:

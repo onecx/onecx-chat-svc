@@ -5,3 +5,4 @@ include::onecx-chat-svc-attributes.adoc[opts=optional]
 
 
 include::onecx-chat-svc-docs.adoc[opts=optional]
+include::onecx-chat-svc-conversation-entries.adoc[opts=optional]
