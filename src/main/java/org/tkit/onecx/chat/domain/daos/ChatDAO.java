@@ -5,6 +5,7 @@ import java.util.List;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.persistence.EntityGraph;
+import jakarta.persistence.LockModeType;
 import jakarta.persistence.NoResultException;
 import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.Predicate;
@@ -85,6 +86,10 @@ public class ChatDAO extends AbstractDAO<Chat> {
         } catch (Exception ex) {
             throw new DAOException(ErrorKeys.ERROR_FIND_ALL_CHAT_PAGE, ex);
         }
+    }
+
+    public Chat lock(String chatId) {
+        return this.getEntityManager().find(Chat.class, chatId, LockModeType.PESSIMISTIC_WRITE);
     }
 
     public enum ErrorKeys {

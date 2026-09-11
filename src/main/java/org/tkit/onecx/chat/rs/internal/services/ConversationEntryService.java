@@ -8,6 +8,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 
+import org.tkit.onecx.chat.domain.daos.ChatDAO;
 import org.tkit.onecx.chat.domain.daos.ConversationEntryDAO;
 import org.tkit.onecx.chat.domain.models.Chat;
 import org.tkit.onecx.chat.domain.models.ConversationEntry;
@@ -27,6 +28,9 @@ public class ConversationEntryService {
     ConversationEntryDAO dao;
 
     @Inject
+    ChatDAO chatDAO;
+
+    @Inject
     ChatMapper chatMapper;
 
     /**
@@ -41,6 +45,7 @@ public class ConversationEntryService {
      */
     @Transactional
     public ConversationEntry createOrUpdate(Chat chat, CreateOrUpdateConversationEntryDTO entry) {
+        chatDAO.lock(chat.getId());
         final String idempotencyKey = entry.getIdempotencyKey();
         ConversationEntry.EntryStatus actualStatus = chatMapper.mapConversationStatus(entry.getStatus());
         final String newText = entry.getText();
