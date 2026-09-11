@@ -14,7 +14,6 @@ import org.tkit.onecx.chat.domain.models.Chat;
 import org.tkit.onecx.chat.domain.models.ConversationEntry;
 import org.tkit.onecx.chat.rs.internal.mappers.ChatMapper;
 import org.tkit.quarkus.jpa.exceptions.ConstraintException;
-import org.tkit.quarkus.jpa.exceptions.DAOException;
 
 import gen.org.tkit.onecx.chat.rs.internal.model.CreateOrUpdateConversationEntryDTO;
 import lombok.extern.slf4j.Slf4j;
@@ -64,10 +63,6 @@ public class ConversationEntryService {
             return dao.findByChatAndIdempotencyKey(chat, idempotencyKey)
                     .map(e -> update(e, actualStatus, newText))
                     .orElseThrow(() -> ex);
-        } catch (DAOException ex) {
-            log.error("Error creating conversation entry for chat {} idempotencyKey {}",
-                    chat.getId(), entry.getIdempotencyKey(), ex);
-            throw ex;
         }
     }
 
