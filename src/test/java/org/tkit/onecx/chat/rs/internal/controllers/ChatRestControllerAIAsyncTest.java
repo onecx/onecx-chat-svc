@@ -40,13 +40,11 @@ class ChatRestControllerAIAsyncTest extends AbstractTest {
     public MockServerClient mockServerClient;
 
     static final String MOCK_ID = "MOCK";
-    static final String MOCK_NOTIFICATION_ID = "MOCK_NOTIFICATION";
 
     @BeforeEach
     void resetExpectation() {
         try {
             mockServerClient.clear(MOCK_ID);
-            mockServerClient.clear(MOCK_NOTIFICATION_ID);
         } catch (Exception _) {
             //  mockId not existing
         }
@@ -132,9 +130,18 @@ class ChatRestControllerAIAsyncTest extends AbstractTest {
         assertThat(immediateMessages.getFirst().getType()).isEqualTo(MessageTypeDTO.HUMAN);
 
         await().atMost(Duration.ofSeconds(30))
-                .untilAsserted(() -> mockServerClient
-                        .verify(dispatchRequestForChatId(chat.getId(), apmPrincipalToken, userAuthorization),
-                                org.mockserver.verify.VerificationTimes.atLeast(1)));
+                .pollInterval(Duration.ofMillis(500))
+                .untilAsserted(() -> {
+                    try {
+                        mockServerClient.verify(
+                                dispatchRequestForChatId(chat.getId(), apmPrincipalToken, userAuthorization),
+                                org.mockserver.verify.VerificationTimes.atLeast(1));
+                    } catch (AssertionError e) {
+                        // Log current expectations for debugging
+                        System.out.println("Mock expectations: " + mockServerClient.retrieveRecordedRequests(null));
+                        throw e;
+                    }
+                });
 
         await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
             var eventualMessages = given()

@@ -18,6 +18,7 @@ import org.mapstruct.ValueMapping;
 import org.tkit.onecx.chat.domain.criteria.ChatMessageSearchCriteria;
 import org.tkit.onecx.chat.domain.criteria.ChatSearchCriteria;
 import org.tkit.onecx.chat.domain.models.Chat;
+import org.tkit.onecx.chat.domain.models.ConversationEntry;
 import org.tkit.onecx.chat.domain.models.Message;
 import org.tkit.onecx.chat.domain.models.Message.MessageType;
 import org.tkit.onecx.chat.domain.models.Participant;
@@ -179,4 +180,14 @@ public interface ChatMapper {
     ParticipantDTO mapToParticipantDTO(AddParticipantDTO addParticipantDTO);
 
     RequestContext mapContext(RequestContextDTO requestContext);
+
+    ConversationEntry.EntryStatus mapConversationStatus(EntryStatusDTO status);
+
+    @Mapping(target = "sequenceNumber", source = "sequence")
+    ChatConversationEntryResponseDTO mapEntryReponse(ConversationEntry entry);
+
+    @Mapping(target = "sequenceNumber", source = "sequence")
+    ChatConversationEntryDTO mapEntryDTO(ConversationEntry entry);
+
+    List<ChatConversationEntryDTO> mapEntries(List<ConversationEntry> entries);
 }

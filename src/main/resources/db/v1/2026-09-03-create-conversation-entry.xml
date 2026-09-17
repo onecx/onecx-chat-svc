@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="
+            http://www.liquibase.org/xml/ns/dbchangelog
+            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet author="dev (generated)" id="1770646801174-1">
+        <createTable tableName="conversation_entry">
+            <column name="optlock" type="INTEGER">
+                <constraints nullable="false"/>
+            </column>
+            <column name="creationdate" type="TIMESTAMP WITHOUT TIME ZONE"/>
+            <column name="modificationdate" type="TIMESTAMP WITHOUT TIME ZONE"/>
+            <column name="guid" type="VARCHAR(255)">
+                <constraints nullable="false"
+                             primaryKey="true"
+                             primaryKeyName="conversation_entry_pkey"/>
+            </column>
+            <column name="tenant_id" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="chat_id" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="sequence_no" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="idempotency_key" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="text" type="VARCHAR(10000)"/>
+            <column name="type" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="creationuser" type="VARCHAR(255)"/>
+            <column name="modificationuser" type="VARCHAR(255)"/>
+        </createTable>
+
+        <addForeignKeyConstraint
+                baseTableName="conversation_entry"
+                baseColumnNames="chat_id"
+                referencedTableName="chat"
+                referencedColumnNames="guid"
+                constraintName="fk_conv_entry_chat"/>
+
+        <addUniqueConstraint tableName="conversation_entry" columnNames="chat_id,sequence_no"
+                constraintName="uk_conv_entry_chat_seq"/>
+
+        <addUniqueConstraint tableName="conversation_entry" columnNames="chat_id,idempotency_key"
+                constraintName="uk_conv_entry_idemp"/>
+
+        <createIndex tableName="conversation_entry" indexName="idx_conv_entry_chat_seq">
+            <column name="chat_id"/>
+            <column name="sequence_no"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

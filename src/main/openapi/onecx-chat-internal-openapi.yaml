@@ -320,6 +320,61 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/ChatMessageResponse'
+  /internal/chats/{chatId}/conversation-entries:
+    put:
+      security:
+        - oauth2: [ ocx-chat:all, ocx-chat:write ]
+      tags:
+        - chatsInternal
+      description: Add new or update conversation entry of the chat by ID and
+      operationId: addOrUpdateConversationEntry
+      parameters:
+        - name: chatId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrUpdateConversationEntry'
+      responses:
+        "204":
+          description: Conversation entries added or updated
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetailResponse'
+        "404":
+          description: Conversation entry not added or updated
+    get:
+      security:
+        - oauth2: [ ocx-chat:all, ocx-chat:read ]
+      tags:
+        - chatsInternal
+      description: Return Response with list of conversation entrieschat by chat ID
+      operationId: getConversationEntriesByChatId
+      parameters:
+        - name: chatId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ChatConversationEntry'
+        "404":
+          description: Not found
 components:
   securitySchemes:
     oauth2:
@@ -697,3 +752,54 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Participant'           
+    CreateOrUpdateConversationEntry:
+      required:
+        - idempotencyKey
+        - type
+      type: object
+      properties:
+        idempotencyKey:
+          type: string
+          description: Unique key to identify the conversation entry for idempotency
+        chat:
+          $ref: '#/components/schemas/Chat'
+        status:
+          $ref: '#/components/schemas/EntryStatus'
+        text:
+          type: string
+    EntryStatus:
+      type: string
+      enum:
+        - IN_PROGRESS
+        - COMPLETED
+        - INTERRUPTED
+    ChatConversationEntryResponse:
+      type: object
+      properties:
+        chat:
+          $ref: '#/components/schemas/Chat'
+        idempotencyKey:
+          type: string
+        sequenceNumber:
+          type: integer
+    ChatConversationEntry:
+      type: object
+      properties:
+        chat:
+          $ref: '#/components/schemas/Chat'
+        sequenceNumber:
+          type: integer
+        idempotencyKey:
+          type: string
+          description: Unique key to identify the conversation entry for idempotency
+        text:
+          type: string
+        type:
+          $ref: '#/components/schemas/ConversationType'
+        status:
+          $ref: '#/components/schemas/EntryStatus'
+    ConversationType:
+      type: string
+      enum:
+        - HUMAN
+        - ASSISTANT
