@@ -45,6 +45,12 @@ class ChatsRestControllerTest extends AbstractTest {
     static final String MOCK_ID = "MOCK";
     static final String MOCK_NOTIFICATION_ID = "MOCK_NOTIFICATION";
 
+    private static CreateOrUpdateConversationEntryDTO conversationEntry() {
+        var entry = new CreateOrUpdateConversationEntryDTO();
+        entry.setType(ConversationTypeDTO.HUMAN);
+        return entry;
+    }
+
     @BeforeEach
     void resetExpectation() {
         try {
@@ -1326,7 +1332,7 @@ class ChatsRestControllerTest extends AbstractTest {
     //Conversation Entry part
     @Test
     void createConversationEntryTest() {
-        var conversationEntryDto = new CreateOrUpdateConversationEntryDTO();
+        var conversationEntryDto = conversationEntry();
         conversationEntryDto.setStatus(EntryStatusDTO.COMPLETED);
         conversationEntryDto.setText("What is the weather today?");
         conversationEntryDto.setIdempotencyKey("unique-key-123");
@@ -1364,7 +1370,7 @@ class ChatsRestControllerTest extends AbstractTest {
     @Test
     void addOrUpdateConversationEntryChatNotFoundTest() {
 
-        var entry = new CreateOrUpdateConversationEntryDTO();
+        var entry = conversationEntry();
         entry.setStatus(EntryStatusDTO.IN_PROGRESS);
         entry.setText("Hello");
         entry.setIdempotencyKey("missing-chat-key");
@@ -1384,7 +1390,7 @@ class ChatsRestControllerTest extends AbstractTest {
 
         var chat = createAiChatForConversationEntries();
 
-        var request = new CreateOrUpdateConversationEntryDTO();
+        var request = conversationEntry();
         request.setStatus(EntryStatusDTO.COMPLETED);
         request.setText("Hello world");
         request.setIdempotencyKey("same-key");
@@ -1414,7 +1420,7 @@ class ChatsRestControllerTest extends AbstractTest {
 
         var chat = createAiChatForConversationEntries();
 
-        var create = new CreateOrUpdateConversationEntryDTO();
+        var create = conversationEntry();
         create.setStatus(EntryStatusDTO.IN_PROGRESS);
         create.setText("");
         create.setIdempotencyKey("blank-key");
@@ -1428,7 +1434,7 @@ class ChatsRestControllerTest extends AbstractTest {
                 .then()
                 .statusCode(NO_CONTENT.getStatusCode());
 
-        var update = new CreateOrUpdateConversationEntryDTO();
+        var update = conversationEntry();
         update.setStatus(EntryStatusDTO.COMPLETED);
         update.setText("Hello world");
         update.setIdempotencyKey("blank-key");
@@ -1448,7 +1454,7 @@ class ChatsRestControllerTest extends AbstractTest {
 
         var chat = createAiChatForConversationEntries();
 
-        var create = new CreateOrUpdateConversationEntryDTO();
+        var create = conversationEntry();
         create.setStatus(EntryStatusDTO.IN_PROGRESS);
         create.setText(null);
         create.setIdempotencyKey("null-text-key");
@@ -1462,7 +1468,7 @@ class ChatsRestControllerTest extends AbstractTest {
                 .then()
                 .statusCode(NO_CONTENT.getStatusCode());
 
-        var update = new CreateOrUpdateConversationEntryDTO();
+        var update = conversationEntry();
         update.setStatus(EntryStatusDTO.COMPLETED);
         update.setText("Hello");
         update.setIdempotencyKey("null-text-key");
@@ -1481,7 +1487,7 @@ class ChatsRestControllerTest extends AbstractTest {
     void addOrUpdateConversationEntryShouldRejectNullNewTextTest() {
         var chat = createAiChatForConversationEntries();
 
-        var create = new CreateOrUpdateConversationEntryDTO();
+        var create = conversationEntry();
         create.setStatus(EntryStatusDTO.IN_PROGRESS);
         create.setText("Hello");
         create.setIdempotencyKey("null-new-text");
@@ -1495,7 +1501,7 @@ class ChatsRestControllerTest extends AbstractTest {
                 .then()
                 .statusCode(NO_CONTENT.getStatusCode());
 
-        var update = new CreateOrUpdateConversationEntryDTO();
+        var update = conversationEntry();
         update.setStatus(EntryStatusDTO.IN_PROGRESS);
         update.setText(null);
         update.setIdempotencyKey("null-new-text");
@@ -1513,7 +1519,7 @@ class ChatsRestControllerTest extends AbstractTest {
 
         var chat = createAiChatForConversationEntries();
 
-        var inProgressEntry = new CreateOrUpdateConversationEntryDTO();
+        var inProgressEntry = conversationEntry();
         inProgressEntry.setStatus(EntryStatusDTO.IN_PROGRESS);
         inProgressEntry.setText("Hello");
         inProgressEntry.setIdempotencyKey("in-progress-key");
@@ -1527,7 +1533,7 @@ class ChatsRestControllerTest extends AbstractTest {
                 .then()
                 .statusCode(NO_CONTENT.getStatusCode());
 
-        var completedEntry = new CreateOrUpdateConversationEntryDTO();
+        var completedEntry = conversationEntry();
         completedEntry.setStatus(EntryStatusDTO.COMPLETED);
         completedEntry.setText("Hello world");
         completedEntry.setIdempotencyKey("completed-key");
@@ -1562,7 +1568,7 @@ class ChatsRestControllerTest extends AbstractTest {
     void addOrUpdateConversationEntryShouldUpdateExistingEntryTest() {
         var chat = createAiChatForConversationEntries();
 
-        var createEntry = new CreateOrUpdateConversationEntryDTO();
+        var createEntry = conversationEntry();
         createEntry.setStatus(EntryStatusDTO.IN_PROGRESS);
         createEntry.setText("Hel");
         createEntry.setIdempotencyKey("update-key");
@@ -1578,7 +1584,7 @@ class ChatsRestControllerTest extends AbstractTest {
                 .as(new TypeRef<List<ChatConversationEntryDTO>>() {
                 });
 
-        var updateEntry = new CreateOrUpdateConversationEntryDTO();
+        var updateEntry = conversationEntry();
         updateEntry.setStatus(EntryStatusDTO.COMPLETED);
         updateEntry.setText("Hello");
         updateEntry.setIdempotencyKey("update-key");
@@ -1615,7 +1621,7 @@ class ChatsRestControllerTest extends AbstractTest {
     void addOrUpdateConversationEntryWithoutIdempotencyKeyTest() {
         var chat = createAiChatForConversationEntries();
 
-        var entry = new CreateOrUpdateConversationEntryDTO();
+        var entry = conversationEntry();
         entry.setStatus(EntryStatusDTO.IN_PROGRESS);
         entry.setText("Hello");
 
@@ -1649,7 +1655,7 @@ class ChatsRestControllerTest extends AbstractTest {
         var chat = createAiChatForConversationEntries();
 
         // First request: create entry with text "Hello World"
-        var createEntry = new CreateOrUpdateConversationEntryDTO();
+        var createEntry = conversationEntry();
         createEntry.setStatus(EntryStatusDTO.IN_PROGRESS);
         createEntry.setText("Hello World");
         createEntry.setIdempotencyKey("monotonic-key");
@@ -1664,7 +1670,7 @@ class ChatsRestControllerTest extends AbstractTest {
                 .statusCode(NO_CONTENT.getStatusCode());
 
         // Second request: try to update with SHORTER text (violates monotonic checkpoint)
-        var violatingUpdate = new CreateOrUpdateConversationEntryDTO();
+        var violatingUpdate = conversationEntry();
         violatingUpdate.setStatus(EntryStatusDTO.IN_PROGRESS);
         violatingUpdate.setText("Hello"); // Shorter than "Hello World" - should fail
         violatingUpdate.setIdempotencyKey("monotonic-key");
@@ -1688,7 +1694,7 @@ class ChatsRestControllerTest extends AbstractTest {
 
         var chat = createAiChatForConversationEntries();
 
-        var create = new CreateOrUpdateConversationEntryDTO();
+        var create = conversationEntry();
         create.setStatus(EntryStatusDTO.IN_PROGRESS);
         create.setText("Hello");
         create.setIdempotencyKey("success-key");
@@ -1702,7 +1708,7 @@ class ChatsRestControllerTest extends AbstractTest {
                 .then()
                 .statusCode(NO_CONTENT.getStatusCode());
 
-        var update = new CreateOrUpdateConversationEntryDTO();
+        var update = conversationEntry();
         update.setStatus(EntryStatusDTO.COMPLETED);
         update.setText("Hello world");
         update.setIdempotencyKey("success-key");
@@ -1722,7 +1728,7 @@ class ChatsRestControllerTest extends AbstractTest {
         var chat = createAiChatForConversationEntries();
 
         // First request: create entry and immediately complete it
-        var createCompleted = new CreateOrUpdateConversationEntryDTO();
+        var createCompleted = conversationEntry();
         createCompleted.setStatus(EntryStatusDTO.COMPLETED);
         createCompleted.setText("Completed entry");
         createCompleted.setIdempotencyKey("terminal-key");
@@ -1737,7 +1743,7 @@ class ChatsRestControllerTest extends AbstractTest {
                 .statusCode(NO_CONTENT.getStatusCode());
 
         // Second request: try to update terminal entry (should fail with 500 or 409)
-        var updateTerminal = new CreateOrUpdateConversationEntryDTO();
+        var updateTerminal = conversationEntry();
         updateTerminal.setStatus(EntryStatusDTO.IN_PROGRESS);
         updateTerminal.setText("Completed entry - trying to update");
         updateTerminal.setIdempotencyKey("terminal-key");
@@ -1761,7 +1767,7 @@ class ChatsRestControllerTest extends AbstractTest {
         var chat = createAiChatForConversationEntries();
 
         // First request: create entry and immediately complete it
-        var createCompleted = new CreateOrUpdateConversationEntryDTO();
+        var createCompleted = conversationEntry();
         createCompleted.setStatus(EntryStatusDTO.INTERRUPTED);
         createCompleted.setText("Completed entry");
         createCompleted.setIdempotencyKey("terminal-key");
@@ -1776,7 +1782,7 @@ class ChatsRestControllerTest extends AbstractTest {
                 .statusCode(NO_CONTENT.getStatusCode());
 
         // Second request: try to update terminal entry (should fail with 500 or 409)
-        var updateTerminal = new CreateOrUpdateConversationEntryDTO();
+        var updateTerminal = conversationEntry();
         updateTerminal.setStatus(EntryStatusDTO.IN_PROGRESS);
         updateTerminal.setText("Completed entry - trying to update");
         updateTerminal.setIdempotencyKey("terminal-key");
@@ -1793,6 +1799,93 @@ class ChatsRestControllerTest extends AbstractTest {
 
         assertThat(response).isNotNull();
         assertThat(response.getDetail()).contains("terminal");
+    }
+
+    @Test
+    void assistantEntryReturnsTypeAndAgentConfigVersion() {
+        var chat = createAiChatForConversationEntries();
+        var entry = conversationEntry();
+        entry.setIdempotencyKey("assistant-entry");
+        entry.setType(ConversationTypeDTO.ASSISTANT);
+        entry.setStatus(EntryStatusDTO.COMPLETED);
+        entry.setText("Assistant response");
+        entry.setAgentConfigVersion("agent-config-1");
+
+        given()
+                .auth().oauth2(getKeycloakClientToken("testClient"))
+                .pathParam("chatId", chat.getId())
+                .contentType(APPLICATION_JSON)
+                .body(entry)
+                .put("{chatId}/conversation-entries")
+                .then()
+                .statusCode(NO_CONTENT.getStatusCode());
+
+        var entries = given()
+                .auth().oauth2(getKeycloakClientToken("testClient"))
+                .pathParam("chatId", chat.getId())
+                .contentType(APPLICATION_JSON)
+                .get("{chatId}/conversation-entries")
+                .then()
+                .statusCode(OK.getStatusCode())
+                .extract()
+                .as(new TypeRef<List<ChatConversationEntryDTO>>() {
+                });
+
+        assertThat(entries).singleElement().satisfies(result -> {
+            assertThat(result.getType()).isEqualTo(ConversationTypeDTO.ASSISTANT);
+            assertThat(result.getAgentConfigVersion()).isEqualTo("agent-config-1");
+        });
+    }
+
+    @Test
+    void conversationEntryRejectsChangedTypeAndAgentConfigVersion() {
+        var chat = createAiChatForConversationEntries();
+        var entry = conversationEntry();
+        entry.setIdempotencyKey("immutable-metadata");
+        entry.setType(ConversationTypeDTO.ASSISTANT);
+        entry.setStatus(EntryStatusDTO.IN_PROGRESS);
+        entry.setText("Assistant response");
+        entry.setAgentConfigVersion("agent-config-1");
+
+        given()
+                .auth().oauth2(getKeycloakClientToken("testClient"))
+                .pathParam("chatId", chat.getId())
+                .contentType(APPLICATION_JSON)
+                .body(entry)
+                .put("{chatId}/conversation-entries")
+                .then()
+                .statusCode(NO_CONTENT.getStatusCode());
+
+        var changedType = conversationEntry();
+        changedType.setIdempotencyKey("immutable-metadata");
+        changedType.setStatus(EntryStatusDTO.IN_PROGRESS);
+        changedType.setText("Assistant response");
+        changedType.setAgentConfigVersion("agent-config-1");
+
+        given()
+                .auth().oauth2(getKeycloakClientToken("testClient"))
+                .pathParam("chatId", chat.getId())
+                .contentType(APPLICATION_JSON)
+                .body(changedType)
+                .put("{chatId}/conversation-entries")
+                .then()
+                .statusCode(BAD_REQUEST.getStatusCode());
+
+        var changedVersion = conversationEntry();
+        changedVersion.setIdempotencyKey("immutable-metadata");
+        changedVersion.setType(ConversationTypeDTO.ASSISTANT);
+        changedVersion.setStatus(EntryStatusDTO.IN_PROGRESS);
+        changedVersion.setText("Assistant response");
+        changedVersion.setAgentConfigVersion("agent-config-2");
+
+        given()
+                .auth().oauth2(getKeycloakClientToken("testClient"))
+                .pathParam("chatId", chat.getId())
+                .contentType(APPLICATION_JSON)
+                .body(changedVersion)
+                .put("{chatId}/conversation-entries")
+                .then()
+                .statusCode(BAD_REQUEST.getStatusCode());
     }
 
     private ChatDTO createAiChatForConversationEntries() {

@@ -183,6 +183,8 @@ public interface ChatMapper {
 
     ConversationEntry.EntryStatus mapConversationStatus(EntryStatusDTO status);
 
+    ConversationEntry.EntryType mapConversationType(ConversationTypeDTO type);
+
     @Mapping(target = "sequenceNumber", source = "sequence")
     ChatConversationEntryResponseDTO mapEntryReponse(ConversationEntry entry);
 

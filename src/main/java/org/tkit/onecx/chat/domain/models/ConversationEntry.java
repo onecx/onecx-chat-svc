@@ -36,6 +36,9 @@ public class ConversationEntry extends TraceableEntity {
     @Column(name = "TEXT", length = 10000)
     private String text;
 
+    @Column(name = "AGENT_CONFIG_VERSION", length = 255)
+    private String agentConfigVersion;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "TYPE", nullable = false)
     private EntryType type;
@@ -52,12 +55,14 @@ public class ConversationEntry extends TraceableEntity {
             return false;
         return Objects.equals(tenantId, that.tenantId) && Objects.equals(chat, that.chat)
                 && Objects.equals(sequence, that.sequence) && Objects.equals(idempotencyKey, that.idempotencyKey)
-                && Objects.equals(text, that.text) && type == that.type && status == that.status;
+                && Objects.equals(text, that.text) && Objects.equals(agentConfigVersion, that.agentConfigVersion)
+                && type == that.type && status == that.status;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(super.hashCode(), tenantId, chat, sequence, idempotencyKey, text, type, status);
+        return Objects.hash(super.hashCode(), tenantId, chat, sequence, idempotencyKey, text, agentConfigVersion, type,
+                status);
     }
 
     public enum EntryType {
