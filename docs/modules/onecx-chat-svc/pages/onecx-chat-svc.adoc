@@ -1,0 +1,18 @@
+== Conversation Entries
+
+Conversation Entries provide an idempotent, sequence-ordered persistence model
+alongside chat messages. Internal runtimes create or update an entry with
+`PUT /internal/chats/{chatId}/conversation-entries` and an idempotency key.
+
+* Each entry has a required `type`: `HUMAN` or `ASSISTANT`.
+* The first write assigns a stable, per-chat sequence number. Later updates keep
+  that number unchanged.
+* `IN_PROGRESS` text may only grow by prefix; identical retries are no-ops and
+  incompatible retries return a conflict.
+* `COMPLETED` and `INTERRUPTED` entries are terminal and cannot be modified.
+* A retried idempotency key must retain its original type. An optional
+  `agentConfigVersion` is stored with an entry, may be set once while the entry
+  is non-terminal, and cannot subsequently change.
+* `GET /internal/chats/{chatId}/conversation-entries` returns terminal entries
+  in ascending sequence order. It excludes `IN_PROGRESS` entries and includes
+  each entry's type and agent configuration version.

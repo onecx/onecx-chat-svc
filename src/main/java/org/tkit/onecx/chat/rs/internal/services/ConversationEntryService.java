@@ -46,22 +46,24 @@ public class ConversationEntryService {
     public ConversationEntry createOrUpdate(Chat chat, CreateOrUpdateConversationEntryDTO entry) {
         chatDAO.lock(chat.getId());
         final String idempotencyKey = entry.getIdempotencyKey();
+        ConversationEntry.EntryType actualType = chatMapper.mapConversationType(entry.getType());
         ConversationEntry.EntryStatus actualStatus = chatMapper.mapConversationStatus(entry.getStatus());
         final String newText = entry.getText();
+        final String agentConfigVersion = entry.getAgentConfigVersion();
         Optional<ConversationEntry> existing = dao.findByChatAndIdempotencyKey(chat, idempotencyKey);
 
         if (existing.isPresent()) {
-            return update(existing.get(), actualStatus, newText);
+            return update(existing.get(), actualType, actualStatus, newText, agentConfigVersion);
         }
 
         try {
-            return create(chat, idempotencyKey, ConversationEntry.EntryType.HUMAN, actualStatus, newText);
+            return create(chat, idempotencyKey, actualType, actualStatus, newText, agentConfigVersion);
         } catch (ConstraintException ex) {
             // Handle potential race condition where another request created
             log.debug("Persistence conflict creating conversation entry for chat {} idempotencyKey {}, retrying",
                     chat.getId(), entry.getIdempotencyKey(), ex);
             return dao.findByChatAndIdempotencyKey(chat, idempotencyKey)
-                    .map(e -> update(e, actualStatus, newText))
+                    .map(e -> update(e, actualType, actualStatus, newText, agentConfigVersion))
                     .orElseThrow(() -> ex);
         }
     }
@@ -82,7 +84,7 @@ public class ConversationEntryService {
      * must never change afterwards.
      */
     private ConversationEntry create(Chat chat, String idempotencyKey, ConversationEntry.EntryType type,
-            ConversationEntry.EntryStatus status, String text) {
+            ConversationEntry.EntryStatus status, String text, String agentConfigVersion) {
 
         ConversationEntry entry = new ConversationEntry();
         entry.setChat(chat);
@@ -90,6 +92,7 @@ public class ConversationEntryService {
         entry.setType(type);
         entry.setStatus(status);
         entry.setText(text);
+        entry.setAgentConfigVersion(agentConfigVersion);
 
         Long nextSequence = dao.findMaxSequenceByChat(chat) + 1;
 
@@ -108,9 +111,11 @@ public class ConversationEntryService {
      * - checkpoint text must be cumulative
      * - status transitions must be valid
      */
-    private ConversationEntry update(ConversationEntry entry, ConversationEntry.EntryStatus newStatus, String newText) {
+    private ConversationEntry update(ConversationEntry entry, ConversationEntry.EntryType newType,
+            ConversationEntry.EntryStatus newStatus, String newText, String agentConfigVersion) {
 
-        if (isNoOps(entry, newStatus, newText)) {
+        validateImmutableMetadata(entry, newType, agentConfigVersion);
+        if (isNoOps(entry, newStatus, newText, agentConfigVersion)) {
             return entry;
         }
         validateTerminalState(entry);
@@ -118,6 +123,9 @@ public class ConversationEntryService {
 
         entry.setText(newText);
         entry.setStatus(newStatus);
+        if (entry.getAgentConfigVersion() == null) {
+            entry.setAgentConfigVersion(agentConfigVersion);
+        }
 
         return dao.update(entry);
     }
@@ -127,8 +135,21 @@ public class ConversationEntryService {
      * <p>
      * If nothing changes the request is treated as a no-ops.
      */
-    private boolean isNoOps(ConversationEntry entry, ConversationEntry.EntryStatus status, String text) {
-        return Objects.equals(entry.getStatus(), status) && Objects.equals(entry.getText(), text);
+    private boolean isNoOps(ConversationEntry entry, ConversationEntry.EntryStatus status, String text,
+            String agentConfigVersion) {
+        return Objects.equals(entry.getStatus(), status) && Objects.equals(entry.getText(), text)
+                && (agentConfigVersion == null || Objects.equals(entry.getAgentConfigVersion(), agentConfigVersion));
+    }
+
+    private void validateImmutableMetadata(ConversationEntry entry, ConversationEntry.EntryType type,
+            String agentConfigVersion) {
+        if (entry.getType() != type) {
+            throw new IdempotencyConflictException("Conversation entry type must not change.");
+        }
+        if (entry.getAgentConfigVersion() != null && agentConfigVersion != null
+                && !Objects.equals(entry.getAgentConfigVersion(), agentConfigVersion)) {
+            throw new IdempotencyConflictException("Agent configuration version must not change.");
+        }
     }
 
     /**

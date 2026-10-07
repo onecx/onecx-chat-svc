@@ -761,6 +761,11 @@ components:
         idempotencyKey:
           type: string
           description: Unique key to identify the conversation entry for idempotency
+        type:
+          $ref: '#/components/schemas/ConversationType'
+        agentConfigVersion:
+          type: string
+          maxLength: 255
         chat:
           $ref: '#/components/schemas/Chat'
         status:
@@ -782,6 +787,8 @@ components:
           type: string
         sequenceNumber:
           type: integer
+        agentConfigVersion:
+          type: string
     ChatConversationEntry:
       type: object
       properties:
@@ -796,6 +803,8 @@ components:
           type: string
         type:
           $ref: '#/components/schemas/ConversationType'
+        agentConfigVersion:
+          type: string
         status:
           $ref: '#/components/schemas/EntryStatus'
     ConversationType:
