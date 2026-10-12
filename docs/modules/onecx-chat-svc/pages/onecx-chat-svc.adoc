@@ -16,3 +16,17 @@ alongside chat messages. Internal runtimes create or update an entry with
 * `GET /internal/chats/{chatId}/conversation-entries` returns terminal entries
   in ascending sequence order. It excludes `IN_PROGRESS` entries and includes
   each entry's type and agent configuration version.
+
+Voice turns surface in chat history:
+
+* When a Conversation Entry first reaches `COMPLETED` or `INTERRUPTED` with
+  non-empty text, exactly one chat `Message` of the matching type (`HUMAN` or
+  `ASSISTANT`) is created in the same transaction. Retries and no-op updates of
+  the same entry never create a duplicate message.
+* Those messages are regular chat messages, so the existing message endpoints
+  (`GET /internal/chats/{chatId}/messages` and
+  `POST /internal/chats/messages/search`) return them ordered together with
+  typed messages by creation date. The created message is scoped to the same
+  tenant as its chat, so tenant isolation applies unchanged.
+* Typed chat keeps its own behaviour and payload; no data migration is
+  required.

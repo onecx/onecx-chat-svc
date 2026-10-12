@@ -10,8 +10,10 @@ import jakarta.transaction.Transactional;
 
 import org.tkit.onecx.chat.domain.daos.ChatDAO;
 import org.tkit.onecx.chat.domain.daos.ConversationEntryDAO;
+import org.tkit.onecx.chat.domain.daos.MessageDAO;
 import org.tkit.onecx.chat.domain.models.Chat;
 import org.tkit.onecx.chat.domain.models.ConversationEntry;
+import org.tkit.onecx.chat.domain.models.Message;
 import org.tkit.onecx.chat.rs.internal.mappers.ChatMapper;
 import org.tkit.quarkus.jpa.exceptions.ConstraintException;
 
@@ -28,6 +30,9 @@ public class ConversationEntryService {
 
     @Inject
     ChatDAO chatDAO;
+
+    @Inject
+    MessageDAO messageDAO;
 
     @Inject
     ChatMapper chatMapper;
@@ -99,6 +104,10 @@ public class ConversationEntryService {
         entry.setSequence(nextSequence);
         dao.create(entry);
 
+        if (isTerminal(status) && text != null && !text.isBlank()) {
+            createMessageFromEntry(entry);
+        }
+
         return entry;
     }
 
@@ -121,13 +130,41 @@ public class ConversationEntryService {
         validateTerminalState(entry);
         validateMonotonicCheckpoint(entry.getText(), newText);
 
+        final boolean wasTerminal = isTerminal(entry.getStatus());
+
         entry.setText(newText);
         entry.setStatus(newStatus);
         if (entry.getAgentConfigVersion() == null) {
             entry.setAgentConfigVersion(agentConfigVersion);
         }
 
-        return dao.update(entry);
+        final ConversationEntry updated = dao.update(entry);
+
+        if (!wasTerminal && isTerminal(newStatus) && newText != null && !newText.isBlank()) {
+            createMessageFromEntry(updated);
+        }
+
+        return updated;
+    }
+
+    /**
+     * Creates the single chat message for a finished voice turn.
+     * <p>
+     * The message type mirrors the entry's type so that voice turns appear in
+     * the existing message history alongside typed chat.
+     */
+    private void createMessageFromEntry(ConversationEntry entry) {
+        Message message = new Message();
+        message.setChat(entry.getChat());
+        message.setText(entry.getText());
+        message.setType(entry.getType() == ConversationEntry.EntryType.HUMAN ? Message.MessageType.HUMAN
+                : Message.MessageType.ASSISTANT);
+        messageDAO.create(message);
+    }
+
+    private boolean isTerminal(ConversationEntry.EntryStatus status) {
+        return status == ConversationEntry.EntryStatus.COMPLETED
+                || status == ConversationEntry.EntryStatus.INTERRUPTED;
     }
 
     /**

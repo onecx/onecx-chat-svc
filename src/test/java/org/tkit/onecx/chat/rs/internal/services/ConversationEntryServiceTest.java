@@ -4,6 +4,7 @@ import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -13,10 +14,13 @@ import java.util.Optional;
 import jakarta.inject.Inject;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.tkit.onecx.chat.domain.daos.ChatDAO;
 import org.tkit.onecx.chat.domain.daos.ConversationEntryDAO;
+import org.tkit.onecx.chat.domain.daos.MessageDAO;
 import org.tkit.onecx.chat.domain.models.Chat;
 import org.tkit.onecx.chat.domain.models.ConversationEntry;
+import org.tkit.onecx.chat.domain.models.Message;
 import org.tkit.onecx.chat.rs.internal.mappers.ChatMapper;
 import org.tkit.quarkus.jpa.exceptions.ConstraintException;
 import org.tkit.quarkus.jpa.exceptions.DAOException;
@@ -41,6 +45,9 @@ class ConversationEntryServiceTest {
 
     @InjectMock
     ChatMapper chatMapper;
+
+    @InjectMock
+    MessageDAO msgDao;
 
     @Test
     void createOrUpdateShouldLoadExistingEntryAfterConstraintViolation() {
@@ -278,6 +285,149 @@ class ConversationEntryServiceTest {
         when(dao.findByChatAndIdempotencyKey(chat, "entry")).thenReturn(Optional.of(existing));
 
         assertThrows(IdempotencyConflictException.class, () -> service.createOrUpdate(chat, dto));
+    }
+
+    @Test
+    void createOrUpdateCreatesMessageWhenEntryIsTerminalOnFirstCreate() {
+        var chat = new Chat();
+        chat.setId("chat-id");
+
+        var dto = new CreateOrUpdateConversationEntryDTO();
+        dto.setIdempotencyKey("terminal-create");
+        dto.setType(ConversationTypeDTO.HUMAN);
+        dto.setStatus(EntryStatusDTO.COMPLETED);
+        dto.setText("Hello");
+
+        when(chatMapper.mapConversationType(ConversationTypeDTO.HUMAN))
+                .thenReturn(ConversationEntry.EntryType.HUMAN);
+        when(chatMapper.mapConversationStatus(EntryStatusDTO.COMPLETED))
+                .thenReturn(ConversationEntry.EntryStatus.COMPLETED);
+        when(dao.findByChatAndIdempotencyKey(chat, "terminal-create")).thenReturn(Optional.empty());
+        when(dao.findMaxSequenceByChat(chat)).thenReturn(0L);
+
+        service.createOrUpdate(chat, dto);
+
+        var captor = ArgumentCaptor.forClass(Message.class);
+        verify(msgDao, times(1)).create(captor.capture());
+        var message = captor.getValue();
+        assertThat(message.getType()).isEqualTo(Message.MessageType.HUMAN);
+        assertThat(message.getText()).isEqualTo("Hello");
+        assertSame(chat, message.getChat());
+    }
+
+    @Test
+    void createOrUpdateCreatesMessageWhenEntryTransitionsToCompleted() {
+        var chat = new Chat();
+        chat.setId("chat-id");
+        var dto = assistantEntryRequest("entry", "agent-config-1");
+        dto.setStatus(EntryStatusDTO.COMPLETED);
+        var existing = assistantEntry("entry", "agent-config-1");
+        existing.setChat(chat);
+
+        when(chatMapper.mapConversationType(ConversationTypeDTO.ASSISTANT))
+                .thenReturn(ConversationEntry.EntryType.ASSISTANT);
+        when(chatMapper.mapConversationStatus(EntryStatusDTO.COMPLETED))
+                .thenReturn(ConversationEntry.EntryStatus.COMPLETED);
+        when(dao.findByChatAndIdempotencyKey(chat, "entry")).thenReturn(Optional.of(existing));
+        when(dao.update(existing)).thenReturn(existing);
+
+        service.createOrUpdate(chat, dto);
+
+        var captor = ArgumentCaptor.forClass(Message.class);
+        verify(msgDao, times(1)).create(captor.capture());
+        var message = captor.getValue();
+        assertThat(message.getType()).isEqualTo(Message.MessageType.ASSISTANT);
+        assertThat(message.getText()).isEqualTo("Hello");
+        assertSame(chat, message.getChat());
+    }
+
+    @Test
+    void createOrUpdateCreatesMessageWhenEntryTransitionsToInterrupted() {
+        var chat = new Chat();
+        chat.setId("chat-id");
+        var dto = assistantEntryRequest("entry", "agent-config-1");
+        dto.setStatus(EntryStatusDTO.INTERRUPTED);
+        var existing = assistantEntry("entry", "agent-config-1");
+        existing.setChat(chat);
+
+        when(chatMapper.mapConversationType(ConversationTypeDTO.ASSISTANT))
+                .thenReturn(ConversationEntry.EntryType.ASSISTANT);
+        when(chatMapper.mapConversationStatus(EntryStatusDTO.INTERRUPTED))
+                .thenReturn(ConversationEntry.EntryStatus.INTERRUPTED);
+        when(dao.findByChatAndIdempotencyKey(chat, "entry")).thenReturn(Optional.of(existing));
+        when(dao.update(existing)).thenReturn(existing);
+
+        service.createOrUpdate(chat, dto);
+
+        verify(msgDao, times(1)).create(any(Message.class));
+    }
+
+    @Test
+    void createOrUpdateNoOpRetryDoesNotCreateDuplicateMessage() {
+        var chat = new Chat();
+        chat.setId("chat-id");
+        var dto = assistantEntryRequest("entry", "agent-config-1");
+        dto.setStatus(EntryStatusDTO.COMPLETED);
+        // The entry is already terminal with the same text: an identical retry is a no-op.
+        var existing = assistantEntry("entry", "agent-config-1");
+        existing.setStatus(ConversationEntry.EntryStatus.COMPLETED);
+
+        when(chatMapper.mapConversationType(ConversationTypeDTO.ASSISTANT))
+                .thenReturn(ConversationEntry.EntryType.ASSISTANT);
+        when(chatMapper.mapConversationStatus(EntryStatusDTO.COMPLETED))
+                .thenReturn(ConversationEntry.EntryStatus.COMPLETED);
+        when(dao.findByChatAndIdempotencyKey(chat, "entry")).thenReturn(Optional.of(existing));
+
+        service.createOrUpdate(chat, dto);
+
+        verify(msgDao, never()).create(any(Message.class));
+        verify(dao, never()).update(existing);
+    }
+
+    @Test
+    void createOrUpdateDoesNotCreateMessageWhenTerminalEntryTextIsBlank() {
+        var chat = new Chat();
+        chat.setId("chat-id");
+
+        var dto = new CreateOrUpdateConversationEntryDTO();
+        dto.setIdempotencyKey("blank");
+        dto.setType(ConversationTypeDTO.HUMAN);
+        dto.setStatus(EntryStatusDTO.COMPLETED);
+        dto.setText("   ");
+
+        when(chatMapper.mapConversationType(ConversationTypeDTO.HUMAN))
+                .thenReturn(ConversationEntry.EntryType.HUMAN);
+        when(chatMapper.mapConversationStatus(EntryStatusDTO.COMPLETED))
+                .thenReturn(ConversationEntry.EntryStatus.COMPLETED);
+        when(dao.findByChatAndIdempotencyKey(chat, "blank")).thenReturn(Optional.empty());
+        when(dao.findMaxSequenceByChat(chat)).thenReturn(0L);
+
+        service.createOrUpdate(chat, dto);
+
+        verify(msgDao, never()).create(any(Message.class));
+    }
+
+    @Test
+    void createOrUpdateDoesNotCreateMessageWhileEntryIsInProgress() {
+        var chat = new Chat();
+        chat.setId("chat-id");
+
+        var dto = new CreateOrUpdateConversationEntryDTO();
+        dto.setIdempotencyKey("in-progress");
+        dto.setType(ConversationTypeDTO.ASSISTANT);
+        dto.setStatus(EntryStatusDTO.IN_PROGRESS);
+        dto.setText("Hello");
+
+        when(chatMapper.mapConversationType(ConversationTypeDTO.ASSISTANT))
+                .thenReturn(ConversationEntry.EntryType.ASSISTANT);
+        when(chatMapper.mapConversationStatus(EntryStatusDTO.IN_PROGRESS))
+                .thenReturn(ConversationEntry.EntryStatus.IN_PROGRESS);
+        when(dao.findByChatAndIdempotencyKey(chat, "in-progress")).thenReturn(Optional.empty());
+        when(dao.findMaxSequenceByChat(chat)).thenReturn(0L);
+
+        service.createOrUpdate(chat, dto);
+
+        verify(msgDao, never()).create(any(Message.class));
     }
 
     private static CreateOrUpdateConversationEntryDTO assistantEntryRequest(String idempotencyKey,

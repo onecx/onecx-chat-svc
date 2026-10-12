@@ -1888,6 +1888,200 @@ class ChatsRestControllerTest extends AbstractTest {
                 .statusCode(BAD_REQUEST.getStatusCode());
     }
 
+    @Test
+    void getChatMessagesReturnsVoiceTurnsOrderedWithTypedMessagesTest() {
+
+        // create human chat (typed messages are never forwarded to the AI service)
+        var chatDto = new CreateChatDTO();
+        chatDto.setAppId("appId");
+        chatDto.setType(ChatTypeDTO.HUMAN_DIRECT_CHAT);
+        var chat = given()
+                .auth().oauth2(getKeycloakClientToken("testClient"))
+                .contentType(APPLICATION_JSON)
+                .body(chatDto)
+                .post()
+                .then()
+                .statusCode(CREATED.getStatusCode())
+                .extract()
+                .body().as(ChatDTO.class);
+
+        // 1. typed message
+        var messageDto = new CreateMessageDTO();
+        messageDto.setType(MessageTypeDTO.HUMAN);
+        messageDto.setText("typed question");
+        messageDto.setUserId("humanId");
+        given()
+                .auth().oauth2(getKeycloakClientToken("testClient"))
+                .pathParam("chatId", chat.getId())
+                .contentType(APPLICATION_JSON)
+                .body(messageDto)
+                .post("{chatId}/messages")
+                .then()
+                .statusCode(CREATED.getStatusCode());
+
+        // 2. voice turn: a COMPLETED conversation entry produces exactly one HUMAN message
+        var entryDto = new CreateOrUpdateConversationEntryDTO();
+        entryDto.setType(ConversationTypeDTO.HUMAN);
+        entryDto.setStatus(EntryStatusDTO.COMPLETED);
+        entryDto.setText("voice turn text");
+        entryDto.setIdempotencyKey("voice-turn-ordering");
+        given()
+                .auth().oauth2(getKeycloakClientToken("testClient"))
+                .pathParam("chatId", chat.getId())
+                .contentType(APPLICATION_JSON)
+                .body(entryDto)
+                .put("{chatId}/conversation-entries")
+                .then()
+                .statusCode(NO_CONTENT.getStatusCode());
+
+        var response = given()
+                .auth().oauth2(getKeycloakClientToken("testClient"))
+                .contentType(APPLICATION_JSON)
+                .pathParam("chatId", chat.getId())
+                .get("{chatId}/messages")
+                .then()
+                .statusCode(OK.getStatusCode())
+                .extract()
+                .as(new TypeRef<List<MessageDTO>>() {
+                });
+
+        // the voice turn is visible alongside the typed message...
+        assertThat(response).hasSize(2);
+        // ...both are HUMAN (typed + voice-derived)
+        assertThat(response).allSatisfy(m -> assertThat(m.getType()).isEqualTo(MessageTypeDTO.HUMAN));
+        assertThat(response.stream().map(MessageDTO::getText))
+                .containsExactlyInAnyOrder("typed question", "voice turn text");
+        // and the voice-derived message is returned together with the typed one in creation-date order
+        assertThat(response).extracting(MessageDTO::getCreationDate).isSorted();
+    }
+
+    @Test
+    void searchChatMessagesReturnsVoiceTurnsOrderedWithTypedMessagesTest() {
+
+        var chatDto = new CreateChatDTO();
+        chatDto.setAppId("appId");
+        chatDto.setType(ChatTypeDTO.HUMAN_DIRECT_CHAT);
+        var chat = given()
+                .auth().oauth2(getKeycloakClientToken("testClient"))
+                .contentType(APPLICATION_JSON)
+                .body(chatDto)
+                .post()
+                .then()
+                .statusCode(CREATED.getStatusCode())
+                .extract()
+                .body().as(ChatDTO.class);
+
+        var messageDto = new CreateMessageDTO();
+        messageDto.setType(MessageTypeDTO.HUMAN);
+        messageDto.setText("typed question");
+        messageDto.setUserId("humanId");
+        given()
+                .auth().oauth2(getKeycloakClientToken("testClient"))
+                .pathParam("chatId", chat.getId())
+                .contentType(APPLICATION_JSON)
+                .body(messageDto)
+                .post("{chatId}/messages")
+                .then()
+                .statusCode(CREATED.getStatusCode());
+
+        var entryDto = new CreateOrUpdateConversationEntryDTO();
+        entryDto.setType(ConversationTypeDTO.HUMAN);
+        entryDto.setStatus(EntryStatusDTO.COMPLETED);
+        entryDto.setText("voice turn text");
+        entryDto.setIdempotencyKey("voice-turn-search-ordering");
+        given()
+                .auth().oauth2(getKeycloakClientToken("testClient"))
+                .pathParam("chatId", chat.getId())
+                .contentType(APPLICATION_JSON)
+                .body(entryDto)
+                .put("{chatId}/conversation-entries")
+                .then()
+                .statusCode(NO_CONTENT.getStatusCode());
+
+        var criteria = new ChatMessageSearchCriteriaDTO();
+        criteria.setChatId(chat.getId());
+        var data = given()
+                .auth().oauth2(getKeycloakClientToken("testClient"))
+                .contentType(APPLICATION_JSON)
+                .body(criteria)
+                .post("/messages/search")
+                .then()
+                .statusCode(OK.getStatusCode())
+                .extract()
+                .as(ChatMessageResponseDTO.class);
+
+        // findChatMessagesByCriteria returns the voice turn ordered with the typed message
+        assertThat(data.getMessages().getTotalElements()).isEqualTo(2);
+        assertThat(data.getMessages().getStream()).extracting(MessageDTO::getText)
+                .containsExactlyInAnyOrder("typed question", "voice turn text");
+    }
+
+    @Test
+    void createdVoiceTurnMessagesAreScopedToTheirTenantTest() {
+
+        // create an AI chat as tenant-100 (org1)
+        var chatDto = new CreateChatDTO();
+        chatDto.setAppId("appId");
+        chatDto.setType(ChatTypeDTO.AI_CHAT);
+        var chat = given()
+                .auth().oauth2(getKeycloakClientToken("testClient"))
+                .header(APM_HEADER_PARAM, createToken("org1"))
+                .contentType(APPLICATION_JSON)
+                .body(chatDto)
+                .post()
+                .then()
+                .statusCode(CREATED.getStatusCode())
+                .extract()
+                .body().as(ChatDTO.class);
+
+        // a COMPLETED entry creates a voice-turn message scoped to tenant-100
+        var entryDto = new CreateOrUpdateConversationEntryDTO();
+        entryDto.setType(ConversationTypeDTO.HUMAN);
+        entryDto.setStatus(EntryStatusDTO.COMPLETED);
+        entryDto.setText("voice turn text");
+        entryDto.setIdempotencyKey("voice-turn-tenant");
+        given()
+                .auth().oauth2(getKeycloakClientToken("testClient"))
+                .header(APM_HEADER_PARAM, createToken("org1"))
+                .pathParam("chatId", chat.getId())
+                .contentType(APPLICATION_JSON)
+                .body(entryDto)
+                .put("{chatId}/conversation-entries")
+                .then()
+                .statusCode(NO_CONTENT.getStatusCode());
+
+        // the message is visible to tenant-100...
+        var asTenant100 = given()
+                .auth().oauth2(getKeycloakClientToken("testClient"))
+                .header(APM_HEADER_PARAM, createToken("org1"))
+                .contentType(APPLICATION_JSON)
+                .pathParam("chatId", chat.getId())
+                .get("{chatId}/messages")
+                .then()
+                .statusCode(OK.getStatusCode())
+                .extract()
+                .as(new TypeRef<List<MessageDTO>>() {
+                });
+        assertThat(asTenant100).hasSize(1);
+        assertThat(asTenant100.get(0).getText()).isEqualTo("voice turn text");
+
+        // ...and the created message is isolated from another tenant
+        var criteria = new ChatMessageSearchCriteriaDTO();
+        criteria.setChatId(chat.getId());
+        var asOtherTenant = given()
+                .auth().oauth2(getKeycloakClientToken("testClient"))
+                .header(APM_HEADER_PARAM, createToken("org2"))
+                .contentType(APPLICATION_JSON)
+                .body(criteria)
+                .post("/messages/search")
+                .then()
+                .statusCode(OK.getStatusCode())
+                .extract()
+                .as(ChatMessageResponseDTO.class);
+        assertThat(asOtherTenant.getMessages().getTotalElements()).isZero();
+        assertThat(asOtherTenant.getMessages().getStream()).isEmpty();
+    }
+
     private ChatDTO createAiChatForConversationEntries() {
         var chatDto = new CreateChatDTO();
         chatDto.setAppId("appId");
