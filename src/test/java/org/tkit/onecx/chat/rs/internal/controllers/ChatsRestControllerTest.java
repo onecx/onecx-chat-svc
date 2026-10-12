@@ -1945,10 +1945,9 @@ class ChatsRestControllerTest extends AbstractTest {
                 .as(new TypeRef<List<MessageDTO>>() {
                 });
 
-        // the voice turn is visible alongside the typed message...
-        assertThat(response).hasSize(2);
-        // ...both are HUMAN (typed + voice-derived)
-        assertThat(response).allSatisfy(m -> assertThat(m.getType()).isEqualTo(MessageTypeDTO.HUMAN));
+        // the voice turn is visible alongside the typed message, both are HUMAN (typed + voice-derived)
+        assertThat(response).hasSize(2)
+                .allSatisfy(m -> assertThat(m.getType()).isEqualTo(MessageTypeDTO.HUMAN));
         assertThat(response.stream().map(MessageDTO::getText))
                 .containsExactlyInAnyOrder("typed question", "voice turn text");
         // and the voice-derived message is returned together with the typed one in creation-date order

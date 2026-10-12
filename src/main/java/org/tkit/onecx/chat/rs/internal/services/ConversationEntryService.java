@@ -103,10 +103,7 @@ public class ConversationEntryService {
 
         entry.setSequence(nextSequence);
         dao.create(entry);
-
-        if (isTerminal(status) && text != null && !text.isBlank()) {
-            createMessageFromEntry(entry);
-        }
+        createMessageIfFinished(entry);
 
         return entry;
     }
@@ -130,8 +127,6 @@ public class ConversationEntryService {
         validateTerminalState(entry);
         validateMonotonicCheckpoint(entry.getText(), newText);
 
-        final boolean wasTerminal = isTerminal(entry.getStatus());
-
         entry.setText(newText);
         entry.setStatus(newStatus);
         if (entry.getAgentConfigVersion() == null) {
@@ -139,10 +134,7 @@ public class ConversationEntryService {
         }
 
         final ConversationEntry updated = dao.update(entry);
-
-        if (!wasTerminal && isTerminal(newStatus) && newText != null && !newText.isBlank()) {
-            createMessageFromEntry(updated);
-        }
+        createMessageIfFinished(updated);
 
         return updated;
     }
@@ -150,10 +142,15 @@ public class ConversationEntryService {
     /**
      * Creates the single chat message for a finished voice turn.
      * <p>
-     * The message type mirrors the entry's type so that voice turns appear in
-     * the existing message history alongside typed chat.
+     * Only called on the first transition to a terminal state, since terminal entries
+     * are rejected by {@link #validateTerminalState(ConversationEntry)}. The message type
+     * mirrors the entry's type so that voice turns appear in the existing message history
+     * alongside typed chat.
      */
-    private void createMessageFromEntry(ConversationEntry entry) {
+    private void createMessageIfFinished(ConversationEntry entry) {
+        if (!isTerminal(entry.getStatus()) || entry.getText() == null || entry.getText().isBlank()) {
+            return;
+        }
         Message message = new Message();
         message.setChat(entry.getChat());
         message.setText(entry.getText());

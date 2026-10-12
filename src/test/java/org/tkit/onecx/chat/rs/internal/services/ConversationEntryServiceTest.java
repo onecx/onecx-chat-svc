@@ -408,6 +408,28 @@ class ConversationEntryServiceTest {
     }
 
     @Test
+    void createOrUpdateDoesNotCreateMessageWhenTerminalEntryTextIsNull() {
+        var chat = new Chat();
+        chat.setId("chat-id");
+
+        var dto = new CreateOrUpdateConversationEntryDTO();
+        dto.setIdempotencyKey("null-text");
+        dto.setType(ConversationTypeDTO.HUMAN);
+        dto.setStatus(EntryStatusDTO.INTERRUPTED);
+
+        when(chatMapper.mapConversationType(ConversationTypeDTO.HUMAN))
+                .thenReturn(ConversationEntry.EntryType.HUMAN);
+        when(chatMapper.mapConversationStatus(EntryStatusDTO.INTERRUPTED))
+                .thenReturn(ConversationEntry.EntryStatus.INTERRUPTED);
+        when(dao.findByChatAndIdempotencyKey(chat, "null-text")).thenReturn(Optional.empty());
+        when(dao.findMaxSequenceByChat(chat)).thenReturn(0L);
+
+        service.createOrUpdate(chat, dto);
+
+        verify(msgDao, never()).create(any(Message.class));
+    }
+
+    @Test
     void createOrUpdateDoesNotCreateMessageWhileEntryIsInProgress() {
         var chat = new Chat();
         chat.setId("chat-id");
