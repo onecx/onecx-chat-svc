@@ -1,0 +1,52 @@
+---
+openapi: 3.0.3
+info:
+  title: onecx-chat v1 service
+  version: 1.0.0
+servers:
+  - url: "http://onecx-chat-svc:8080"
+tags:
+  - name: chat
+paths:
+  /v1/chats/{chatId}:
+    get:
+      security:
+        - oauth2: [ ocx-chat:read ]
+      tags:
+        - chat
+      description: Return the chat by ID if the requesting user (apm-principal-token) may access it
+      operationId: getChatForUser
+      parameters:
+        - name: chatId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatV1'
+        "404":
+          description: Chat not found or not accessible by the requesting user
+components:
+  securitySchemes:
+    oauth2:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: https://oauth.simple.api/token
+          scopes:
+            ocx-chat:read: Grants read access
+  schemas:
+    ChatV1:
+      type: object
+      required: [ id, type ]
+      properties:
+        id: { type: string }
+        type: { type: string, enum: [ HUMAN_DIRECT_CHAT, HUMAN_GROUP_CHAT, AI_CHAT ] }
+        topic: { type: string }
+        appId: { type: string }
+        userId: { type: string }

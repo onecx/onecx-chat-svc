@@ -34,6 +34,8 @@ class ChatDAOTest {
                 ChatDAO.ErrorKeys.ERROR_FIND_CHATS_BY_CRITERIA);
         methodExceptionTests(() -> dao.findAll(0, 2),
                 ChatDAO.ErrorKeys.ERROR_FIND_ALL_CHAT_PAGE);
+        methodExceptionTests(() -> dao.findChatForUser("id", "user"),
+                ChatDAO.ErrorKeys.ERROR_FIND_CHAT_FOR_USER);
     }
 
     void methodExceptionTests(Executable fn, Enum<?> key) {
