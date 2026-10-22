@@ -1,5 +1,6 @@
 package org.tkit.onecx.chat.domain.daos;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -71,6 +72,8 @@ public class ChatDAO extends AbstractDAO<Chat> {
                 cq.where(cb.and(predicates.toArray(new Predicate[0])));
             }
 
+            cq.orderBy(cb.desc(root.get(Chat_.lastMessageDate)));
+
             return createPageQuery(cq, Page.of(criteria.getPageNumber(), criteria.getPageSize())).getPageResult();
         } catch (Exception ex) {
             throw new DAOException(ErrorKeys.ERROR_FIND_CHATS_BY_CRITERIA, ex);
@@ -86,6 +89,15 @@ public class ChatDAO extends AbstractDAO<Chat> {
         } catch (Exception ex) {
             throw new DAOException(ErrorKeys.ERROR_FIND_ALL_CHAT_PAGE, ex);
         }
+    }
+
+    @Transactional
+    public void updateLastMessageDate(String chatId, LocalDateTime lastMessageDate) {
+        this.getEntityManager()
+                .createQuery("update Chat c set c.lastMessageDate = :date where c.id = :id")
+                .setParameter("date", lastMessageDate)
+                .setParameter("id", chatId)
+                .executeUpdate();
     }
 
     public Chat lock(String chatId) {

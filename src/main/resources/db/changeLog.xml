@@ -7,5 +7,6 @@
     <include file="v1/2026-03-03-increase-message-size.xml" relativeToChangelogFile="true" />
     <include file="v1/2026-09-03-create-conversation-entry.xml" relativeToChangelogFile="true" />
     <include file="v1/2026-10-06-add-conversation-entry-agent-config-version.xml" relativeToChangelogFile="true" />
+    <include file="v1/2026-10-22-add-chat-last-message-date.xml" relativeToChangelogFile="true" />
 
-</databaseChangeLog>
+</databaseChangeLog>

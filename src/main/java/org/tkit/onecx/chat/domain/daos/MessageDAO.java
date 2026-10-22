@@ -2,10 +2,12 @@ package org.tkit.onecx.chat.domain.daos;
 
 import static org.tkit.quarkus.jpa.utils.QueryCriteriaUtil.addSearchStringPredicate;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.transaction.Transactional;
 
@@ -22,6 +24,21 @@ import org.tkit.quarkus.jpa.models.TraceableEntity_;
 @ApplicationScoped
 @Transactional(Transactional.TxType.SUPPORTS)
 public class MessageDAO extends AbstractDAO<Message> {
+
+    @Inject
+    ChatDAO chatDAO;
+
+    @Override
+    @Transactional
+    public Message create(Message message) throws DAOException {
+        var created = super.create(message);
+        if (created.getChat() != null) {
+            var date = created.getCreationDate() != null ? created.getCreationDate() : LocalDateTime.now();
+            chatDAO.updateLastMessageDate(created.getChat().getId(), date);
+            created.getChat().setLastMessageDate(date);
+        }
+        return created;
+    }
 
     public PageResult<Message> findChatMessagesByCriteria(ChatMessageSearchCriteria criteria) {
         try {

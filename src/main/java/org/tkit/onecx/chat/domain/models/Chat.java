@@ -3,6 +3,7 @@ package org.tkit.onecx.chat.domain.models;
 import static jakarta.persistence.CascadeType.*;
 import static jakarta.persistence.FetchType.LAZY;
 
+import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -55,6 +56,16 @@ public class Chat extends TraceableEntity {
 
     @Column(name = "USER_ID")
     private String userId;
+
+    @Column(name = "LAST_MESSAGE_DATE")
+    private LocalDateTime lastMessageDate;
+
+    @PrePersist
+    void initLastMessageDate() {
+        if (lastMessageDate == null) {
+            lastMessageDate = getCreationDate() != null ? getCreationDate() : LocalDateTime.now();
+        }
+    }
 
     public enum ChatType {
         HUMAN_DIRECT_CHAT,

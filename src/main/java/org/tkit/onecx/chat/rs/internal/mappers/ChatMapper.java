@@ -51,6 +51,7 @@ public interface ChatMapper {
     @Mapping(target = "tenantId", ignore = true)
     @Mapping(target = "messages", ignore = true)
     @Mapping(target = "participants", ignore = true)
+    @Mapping(target = "lastMessageDate", ignore = true)
     Chat create(CreateChatDTO object);
 
     List<Participant> mapParticipantDTOs(List<ParticipantDTO> participantDTOs);
@@ -117,6 +118,7 @@ public interface ChatMapper {
     @Mapping(target = "messages", ignore = true)
     @Mapping(target = "participants", ignore = true)
     @Mapping(target = "userId", ignore = true)
+    @Mapping(target = "lastMessageDate", ignore = true)
     void update(UpdateChatDTO chatDTO, @MappingTarget Chat entity);
 
     @Mapping(target = "id", ignore = true)
@@ -126,6 +128,7 @@ public interface ChatMapper {
     @Mapping(target = "tenantId", ignore = true)
     @Mapping(target = "messages", ignore = true)
     @Mapping(target = "userId", ignore = true)
+    @Mapping(target = "lastMessageDate", ignore = true)
     Chat map(UpdateChatDTO object);
 
     @Mapping(source = "id", target = "conversationId")

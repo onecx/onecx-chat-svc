@@ -522,6 +522,8 @@ components:
           type: string
         userId:
           type: string
+        lastMessageDate:
+          $ref: '#/components/schemas/OffsetDateTime'
         participants:
           type: array
           items:
