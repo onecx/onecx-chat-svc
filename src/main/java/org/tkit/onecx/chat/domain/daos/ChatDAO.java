@@ -46,6 +46,33 @@ public class ChatDAO extends AbstractDAO<Chat> {
         }
     }
 
+    /**
+     * Returns the chat with the given ID only if the user is its owner or a participant,
+     * otherwise {@code null}. Does the access check in the database and does not load
+     * messages or participants.
+     */
+    public Chat findChatForUser(String chatId, String userId) {
+        try {
+            var cb = this.getEntityManager().getCriteriaBuilder();
+            var cq = cb.createQuery(Chat.class);
+            var root = cq.from(Chat.class);
+
+            var sq = cq.subquery(Integer.class);
+            var sqRoot = sq.correlate(root);
+            Join<Chat, Participant> participantsJoin = sqRoot.join(Chat_.PARTICIPANTS);
+            sq.select(cb.literal(1)).where(cb.equal(participantsJoin.get("userId"), userId));
+
+            cq.where(cb.equal(root.get(TraceableEntity_.ID), chatId),
+                    cb.or(cb.equal(root.get(Chat_.userId), userId), cb.exists(sq)));
+
+            return this.getEntityManager().createQuery(cq).getSingleResult();
+        } catch (NoResultException nre) {
+            return null;
+        } catch (Exception e) {
+            throw new DAOException(ErrorKeys.ERROR_FIND_CHAT_FOR_USER, e, chatId);
+        }
+    }
+
     public PageResult<Chat> findChatsByCriteria(ChatSearchCriteria criteria) {
         try {
             var cb = this.getEntityManager().getCriteriaBuilder();
@@ -109,5 +136,6 @@ public class ChatDAO extends AbstractDAO<Chat> {
         FIND_ENTITY_BY_ID_FAILED,
         ERROR_FIND_CHATS_BY_CRITERIA,
         ERROR_FIND_ALL_CHAT_PAGE,
+        ERROR_FIND_CHAT_FOR_USER,
     }
 }

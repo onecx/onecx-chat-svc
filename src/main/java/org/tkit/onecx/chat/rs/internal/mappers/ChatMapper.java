@@ -30,6 +30,7 @@ import gen.io.github.onecx.ai.clients.model.ChatMessage.TypeEnum;
 import gen.io.github.onecx.ai.clients.model.Conversation;
 import gen.io.github.onecx.ai.clients.model.RequestContext;
 import gen.org.tkit.onecx.chat.rs.internal.model.*;
+import gen.org.tkit.onecx.chat.rs.v1.model.ChatV1DTO;
 
 @Mapper(uses = { OffsetDateTimeMapper.class })
 public interface ChatMapper {
@@ -87,6 +88,8 @@ public interface ChatMapper {
     @Mapping(target = "version", source = "modificationCount")
     @Mapping(target = "removeParticipantsItem", ignore = true)
     ChatDTO mapChat(Chat chat);
+
+    ChatV1DTO mapChatV1(Chat chat);
 
     @Mapping(target = "version", source = "modificationCount")
     ParticipantDTO mapParticipant(Participant participant);
