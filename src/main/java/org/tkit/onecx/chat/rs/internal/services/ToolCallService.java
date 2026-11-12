@@ -87,6 +87,7 @@ public class ToolCallService {
         call.setExecutionState(policy == ToolCall.PolicyDecision.DENY
                 ? ToolCall.ExecutionState.BLOCKED : ToolCall.ExecutionState.NOT_STARTED);
         call.setSafeSummary(request.getSafeSummary());
+        call.setRequestSafeSummary(request.getSafeSummary());
         if (policy == ToolCall.PolicyDecision.DENY) {
             call.setBlockedReason("POLICY_DENIED");
         }
@@ -218,9 +219,11 @@ public class ToolCallService {
         return dao.findByChat(chat).stream().map(this::safeSummary).toList();
     }
 
+    @Transactional
     public List<ToolCallRuntimeReplayDTO> runtimeReplay(Chat chat) {
-        List<ToolCall> calls = dao.findByChat(chat);
-        List<ConversationEntry> entries = conversationEntryDAO.findReplayEntries(chat);
+        Chat lockedChat = lock(chat);
+        List<ToolCall> calls = dao.findByChat(lockedChat);
+        List<ConversationEntry> entries = conversationEntryDAO.findReplayEntries(lockedChat);
         List<ToolCallRuntimeReplayDTO> replay = new ArrayList<>();
         for (ConversationEntry entry : entries) {
             ToolCallRuntimeReplayDTO event = new ToolCallRuntimeReplayDTO();
@@ -327,7 +330,7 @@ public class ToolCallService {
                 || !Objects.equals(call.getArgumentHash(), request.getArgumentHash())
                 || !Objects.equals(call.getProposingPrincipal(), request.getProposingPrincipal())
                 || !Objects.equals(call.getRuntime(), request.getRuntime())
-                || !Objects.equals(call.getSafeSummary(), request.getSafeSummary())
+                || !Objects.equals(call.getRequestSafeSummary(), request.getSafeSummary())
                 || call.getPolicyDecision() != policy) {
             throw conflict("The idempotency key is already bound to different tool-call data.");
         }

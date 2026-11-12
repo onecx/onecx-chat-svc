@@ -3,6 +3,7 @@ package org.tkit.onecx.chat.rs.internal.services;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -178,10 +179,14 @@ class ToolCallServiceTest {
         call.setDecisionState(ToolCall.DecisionState.NOT_REQUIRED);
         call.setExecutionState(ToolCall.ExecutionState.NOT_STARTED);
         call.setSafeSummary(request.getSafeSummary());
+        call.setRequestSafeSummary(request.getSafeSummary());
         call.setSequence(1L);
         when(toolCallDAO.findByChatAndIdempotencyKey(chat, request.getIdempotencyKey()))
                 .thenReturn(Optional.of(call));
 
+        assertThat(service.register(chat, request).getAttemptId()).isEqualTo(request.getAttemptId());
+        call.setSafeSummary("Execution completed");
+        call.setExecutionState(ToolCall.ExecutionState.SUCCEEDED);
         assertThat(service.register(chat, request).getAttemptId()).isEqualTo(request.getAttemptId());
         request.setArguments("{\"query\":\"changed\"}");
         assertThrows(IdempotencyConflictException.class, () -> service.register(chat, request));
@@ -232,6 +237,10 @@ class ToolCallServiceTest {
         assertThat(replay.get(0).getExactResult()).isNull();
         assertThat(replay.get(1).getSequenceNumber()).isEqualTo(2L);
         assertThat(replay.get(1).getExactResult()).isEqualTo("{\"private\":\"result\"}");
+        var inOrder = inOrder(chatDAO, toolCallDAO, conversationEntryDAO);
+        inOrder.verify(chatDAO).lock("chat-1");
+        inOrder.verify(toolCallDAO).findByChat(chat);
+        inOrder.verify(conversationEntryDAO).findReplayEntries(chat);
     }
 
     private ToolCall pendingAttempt() {

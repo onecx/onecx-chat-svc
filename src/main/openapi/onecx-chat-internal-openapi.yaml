@@ -1266,6 +1266,7 @@ components:
           $ref: '#/components/schemas/ToolCallBlockedReason'
         sequenceNumber:
           type: integer
+          format: int64
         runtime:
           type: string
     ToolCallClaimResponse:
@@ -1288,6 +1289,7 @@ components:
           type: string
         sequenceNumber:
           type: integer
+          format: int64
         eventIdempotencyKey:
           type: string
         eventType:

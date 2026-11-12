@@ -85,6 +85,9 @@ public class ToolCall extends TraceableEntity {
     @Column(name = "SAFE_SUMMARY", columnDefinition = "TEXT")
     private String safeSummary;
 
+    @Column(name = "REQUEST_SAFE_SUMMARY", columnDefinition = "TEXT", updatable = false)
+    private String requestSafeSummary;
+
     @Column(name = "CLAIM_ID")
     private String claimId;
 

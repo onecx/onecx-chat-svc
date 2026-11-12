@@ -2,7 +2,6 @@ package org.tkit.onecx.chat.rs.internal.controllers;
 
 import static jakarta.ws.rs.core.MediaType.APPLICATION_JSON;
 
-import jakarta.annotation.security.RolesAllowed;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.validation.Valid;
@@ -15,6 +14,7 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.Response;
 import jakarta.transaction.Transactional;
 
+import io.quarkus.security.PermissionsAllowed;
 import org.jboss.resteasy.reactive.RestResponse;
 import org.jboss.resteasy.reactive.server.ServerExceptionMapper;
 import org.tkit.onecx.chat.domain.daos.ChatDAO;
@@ -47,7 +47,7 @@ public class ToolCallsRestController {
     ToolCallService service;
 
     @POST
-    @RolesAllowed("ocx-chat:tool-runtime")
+    @PermissionsAllowed("ocx-chat:tool-runtime")
     public Response register(@PathParam("chatId") String chatId, @Valid RegisterToolCallDTO request) {
         Chat chat = chatDAO.findById(chatId);
         if (chat == null) {
@@ -57,7 +57,7 @@ public class ToolCallsRestController {
     }
 
     @GET
-    @RolesAllowed("ocx-chat:read")
+    @PermissionsAllowed(value = { "ocx-chat:all", "ocx-chat:read" }, inclusive = false)
     public Response history(@PathParam("chatId") String chatId) {
         Chat chat = chatDAO.findById(chatId);
         if (chat == null) {
@@ -68,7 +68,7 @@ public class ToolCallsRestController {
 
     @POST
     @Path("{attemptId}/decision")
-    @RolesAllowed("ocx-chat:write")
+    @PermissionsAllowed(value = { "ocx-chat:all", "ocx-chat:write" }, inclusive = false)
     public Response decide(@PathParam("chatId") String chatId, @PathParam("attemptId") String attemptId,
             @Valid ToolCallDecisionDTO request) {
         Chat chat = chatDAO.findById(chatId);
@@ -80,7 +80,7 @@ public class ToolCallsRestController {
 
     @POST
     @Path("{attemptId}/claims")
-    @RolesAllowed("ocx-chat:tool-runtime")
+    @PermissionsAllowed("ocx-chat:tool-runtime")
     public Response claim(@PathParam("chatId") String chatId, @PathParam("attemptId") String attemptId,
             @Valid ToolCallClaimDTO request) {
         Chat chat = chatDAO.findById(chatId);
@@ -94,7 +94,7 @@ public class ToolCallsRestController {
 
     @POST
     @Path("{attemptId}/outcome")
-    @RolesAllowed("ocx-chat:tool-runtime")
+    @PermissionsAllowed("ocx-chat:tool-runtime")
     public Response outcome(@PathParam("chatId") String chatId, @PathParam("attemptId") String attemptId,
             @Valid ToolCallOutcomeDTO request) {
         Chat chat = chatDAO.findById(chatId);
@@ -106,7 +106,7 @@ public class ToolCallsRestController {
 
     @POST
     @Path("{attemptId}/continuations")
-    @RolesAllowed("ocx-chat:tool-runtime")
+    @PermissionsAllowed("ocx-chat:tool-runtime")
     public Response continuation(@PathParam("chatId") String chatId, @PathParam("attemptId") String attemptId,
             @Valid ToolCallContinuationDTO request) {
         Chat chat = chatDAO.findById(chatId);
@@ -119,7 +119,7 @@ public class ToolCallsRestController {
 
     @GET
     @Path("runtime-replay")
-    @RolesAllowed("ocx-chat:tool-runtime")
+    @PermissionsAllowed("ocx-chat:tool-runtime")
     public Response runtimeReplay(@PathParam("chatId") String chatId) {
         Chat chat = chatDAO.findById(chatId);
         if (chat == null) {
