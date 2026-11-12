@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet author="onecx" id="2026-11-12-add-tool-call-lifecycle">
+        <addColumn tableName="conversation_entry">
+            <column name="causal_reference" type="VARCHAR(255)"/>
+            <column name="event_snapshot" type="TEXT"/>
+        </addColumn>
+
+        <createTable tableName="tool_call">
+            <column name="optlock" type="INTEGER">
+                <constraints nullable="false"/>
+            </column>
+            <column name="creationdate" type="TIMESTAMP WITHOUT TIME ZONE"/>
+            <column name="modificationdate" type="TIMESTAMP WITHOUT TIME ZONE"/>
+            <column name="guid" type="VARCHAR(255)">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="tool_call_pkey"/>
+            </column>
+            <column name="tenant_id" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="chat_id" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="attempt_id" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="idempotency_key" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="tool_name" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="arguments" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="configuration_hash" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="schema_hash" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="argument_hash" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="proposing_principal" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="reporting_principal" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="decision_principal" type="VARCHAR(255)"/>
+            <column name="runtime" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="policy_decision" type="VARCHAR(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="decision_state" type="VARCHAR(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="execution_state" type="VARCHAR(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="safe_summary" type="TEXT"/>
+            <column name="claim_id" type="VARCHAR(255)"/>
+            <column name="claim_idempotency_key" type="VARCHAR(255)"/>
+            <column name="claim_owner" type="VARCHAR(255)"/>
+            <column name="outcome_idempotency_key" type="VARCHAR(255)"/>
+            <column name="outcome_principal" type="VARCHAR(255)"/>
+            <column name="exact_result" type="TEXT"/>
+            <column name="blocked_reason" type="VARCHAR(255)"/>
+            <column name="sequence_no" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="decision_idempotency_key" type="VARCHAR(255)"/>
+            <column name="creationuser" type="VARCHAR(255)"/>
+            <column name="modificationuser" type="VARCHAR(255)"/>
+        </createTable>
+
+        <addForeignKeyConstraint baseTableName="tool_call" baseColumnNames="chat_id"
+                referencedTableName="chat" referencedColumnNames="guid"
+                constraintName="fk_tool_call_chat" onDelete="CASCADE"/>
+        <addUniqueConstraint tableName="tool_call" columnNames="chat_id,attempt_id"
+                constraintName="uk_tool_call_chat_attempt"/>
+        <addUniqueConstraint tableName="tool_call" columnNames="chat_id,idempotency_key"
+                constraintName="uk_tool_call_chat_idemp"/>
+        <addUniqueConstraint tableName="tool_call" columnNames="chat_id,sequence_no"
+                constraintName="uk_tool_call_chat_seq"/>
+        <addUniqueConstraint tableName="tool_call" columnNames="chat_id,claim_id"
+                constraintName="uk_tool_call_chat_claim"/>
+        <createIndex tableName="tool_call" indexName="idx_tool_call_chat_seq">
+            <column name="chat_id"/>
+            <column name="sequence_no"/>
+        </createIndex>
+        <sql>CREATE UNIQUE INDEX uk_tool_call_active_chat_claim ON tool_call (chat_id) WHERE execution_state = 'CLAIMED'</sql>
+    </changeSet>
+</databaseChangeLog>

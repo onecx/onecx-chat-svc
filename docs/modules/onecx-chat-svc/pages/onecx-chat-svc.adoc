@@ -30,3 +30,32 @@ Voice turns surface in chat history:
   tenant as its chat, so tenant isolation applies unchanged.
 * Typed chat keeps its own behaviour and payload; no data migration is
   required.
+
+== Tool-call lifecycle
+
+Tool runtimes register policy-evaluated attempts with
+`POST /internal/chats/{chatId}/tool-calls`. The chat service persists the
+attempt and its immutable bindings (tool name, exact arguments, configuration
+snapshot hash, schema hash, argument hash, proposing principal, and runtime);
+policy evaluation and tool invocation remain the runtime's responsibility.
+
+* `DENY` is recorded as a blocked result and cannot be claimed. `ALLOW` is
+  immediately eligible for a claim. `ALWAYS_ASK` is a durable pending proposal
+  that remains pending until explicitly approved or rejected, even while the
+  conversation continues.
+* Decision and execution state are independent. A proposal accepts one atomic
+  terminal decision. Every request, decision, claim, result, and continuation
+  is appended to the same locked, sequence-ordered conversation history.
+* Execution claims are serialized per conversation. A claim is recorded before
+  the runtime is allowed to invoke its tool; only its owner may report an
+  outcome. A claim is not automatically reclaimed after a crash because the
+  external side effect may already have occurred.
+* Safe conversation history and `GET /internal/chats/{chatId}/tool-calls`
+  expose only producer-sanitized summaries. Exact arguments and model-consumed
+  results are available only from the runtime-scoped claim/replay operations.
+  Ordinary message and conversation-entry APIs never project tool data into
+  chat messages.
+* Both AI provider runtimes and Pipecat use the same lifecycle and stable
+  idempotency keys. Runtime producers must sanitize summaries and continuation
+  text before reporting them; the service stores those values but does not
+  interpret or redact tool payloads.
