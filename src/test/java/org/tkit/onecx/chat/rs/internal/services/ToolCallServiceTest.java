@@ -29,12 +29,12 @@ import org.tkit.onecx.chat.domain.models.ToolCall;
 
 import gen.org.tkit.onecx.chat.rs.internal.model.RegisterToolCallDTO;
 import gen.org.tkit.onecx.chat.rs.internal.model.ToolCallClaimDTO;
-import gen.org.tkit.onecx.chat.rs.internal.model.ToolCallDecisionDTO;
 import gen.org.tkit.onecx.chat.rs.internal.model.ToolCallContinuationDTO;
+import gen.org.tkit.onecx.chat.rs.internal.model.ToolCallDecisionDTO;
 import gen.org.tkit.onecx.chat.rs.internal.model.ToolCallOutcomeDTO;
+import gen.org.tkit.onecx.chat.rs.internal.model.ToolCallOutcomeStateDTO;
 import gen.org.tkit.onecx.chat.rs.internal.model.ToolCallPolicyDecisionDTO;
 import gen.org.tkit.onecx.chat.rs.internal.model.ToolCallTerminalDecisionDTO;
-import gen.org.tkit.onecx.chat.rs.internal.model.ToolCallOutcomeStateDTO;
 import io.quarkus.security.identity.SecurityIdentity;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
@@ -276,8 +276,8 @@ class ToolCallServiceTest {
         ToolCall call = pendingAttempt();
         when(toolCallDAO.findByChatAndAttemptId(chat, "attempt-1")).thenReturn(Optional.of(call));
         Map<String, ConversationEntry> entries = new HashMap<>();
-        when(conversationEntryDAO.findByChatAndIdempotencyKey(any(), anyString())).thenAnswer(invocation ->
-                Optional.ofNullable(entries.get(invocation.getArgument(1))));
+        when(conversationEntryDAO.findByChatAndIdempotencyKey(any(), anyString()))
+                .thenAnswer(invocation -> Optional.ofNullable(entries.get(invocation.getArgument(1))));
         when(conversationEntryDAO.create(any(ConversationEntry.class))).thenAnswer(invocation -> {
             ConversationEntry created = invocation.getArgument(0);
             entries.put(created.getIdempotencyKey(), created);

@@ -20,8 +20,8 @@ import org.tkit.onecx.chat.test.AbstractTest;
 import org.tkit.quarkus.security.test.GenerateKeycloakClient;
 import org.tkit.quarkus.test.WithDBData;
 
-import gen.org.tkit.onecx.chat.rs.internal.model.CreateChatDTO;
 import gen.org.tkit.onecx.chat.rs.internal.model.ChatTypeDTO;
+import gen.org.tkit.onecx.chat.rs.internal.model.CreateChatDTO;
 import gen.org.tkit.onecx.chat.rs.internal.model.RegisterToolCallDTO;
 import gen.org.tkit.onecx.chat.rs.internal.model.ToolCallClaimDTO;
 import gen.org.tkit.onecx.chat.rs.internal.model.ToolCallDecisionDTO;

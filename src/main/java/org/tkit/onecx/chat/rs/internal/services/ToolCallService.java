@@ -3,17 +3,15 @@ package org.tkit.onecx.chat.rs.internal.services;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
-import java.util.UUID;
 import java.util.Map;
+import java.util.Objects;
 import java.util.TreeMap;
+import java.util.UUID;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.tkit.onecx.chat.domain.daos.ChatDAO;
 import org.tkit.onecx.chat.domain.daos.ConversationEntryDAO;
 import org.tkit.onecx.chat.domain.daos.ToolCallDAO;
@@ -21,7 +19,8 @@ import org.tkit.onecx.chat.domain.models.Chat;
 import org.tkit.onecx.chat.domain.models.ConversationEntry;
 import org.tkit.onecx.chat.domain.models.ToolCall;
 
-import io.quarkus.security.identity.SecurityIdentity;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import gen.org.tkit.onecx.chat.rs.internal.model.RegisterToolCallDTO;
 import gen.org.tkit.onecx.chat.rs.internal.model.ToolCallBlockedReasonDTO;
@@ -35,6 +34,7 @@ import gen.org.tkit.onecx.chat.rs.internal.model.ToolCallOutcomeDTO;
 import gen.org.tkit.onecx.chat.rs.internal.model.ToolCallPolicyDecisionDTO;
 import gen.org.tkit.onecx.chat.rs.internal.model.ToolCallRuntimeReplayDTO;
 import gen.org.tkit.onecx.chat.rs.internal.model.ToolCallSafeSummaryDTO;
+import io.quarkus.security.identity.SecurityIdentity;
 
 @ApplicationScoped
 @Transactional(Transactional.TxType.NOT_SUPPORTED)
@@ -83,9 +83,11 @@ public class ToolCallService {
         call.setRuntime(request.getRuntime());
         call.setPolicyDecision(policy);
         call.setDecisionState(policy == ToolCall.PolicyDecision.ALWAYS_ASK
-                ? ToolCall.DecisionState.PENDING : ToolCall.DecisionState.NOT_REQUIRED);
+                ? ToolCall.DecisionState.PENDING
+                : ToolCall.DecisionState.NOT_REQUIRED);
         call.setExecutionState(policy == ToolCall.PolicyDecision.DENY
-                ? ToolCall.ExecutionState.BLOCKED : ToolCall.ExecutionState.NOT_STARTED);
+                ? ToolCall.ExecutionState.BLOCKED
+                : ToolCall.ExecutionState.NOT_STARTED);
         call.setSafeSummary(request.getSafeSummary());
         call.setRequestSafeSummary(request.getSafeSummary());
         if (policy == ToolCall.PolicyDecision.DENY) {
@@ -345,7 +347,8 @@ public class ToolCallService {
         dto.setDecisionState(ToolCallDecisionStateDTO.valueOf(call.getDecisionState().name()));
         dto.setExecutionState(ToolCallExecutionStateDTO.valueOf(call.getExecutionState().name()));
         dto.setBlockedReason(call.getBlockedReason() == null
-                ? null : ToolCallBlockedReasonDTO.valueOf(call.getBlockedReason()));
+                ? null
+                : ToolCallBlockedReasonDTO.valueOf(call.getBlockedReason()));
         dto.setSequenceNumber(call.getSequence());
         dto.setRuntime(call.getRuntime());
         return dto;

@@ -4,6 +4,7 @@ import static jakarta.ws.rs.core.MediaType.APPLICATION_JSON;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import jakarta.transaction.Transactional;
 import jakarta.validation.Valid;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
@@ -12,9 +13,7 @@ import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.Response;
-import jakarta.transaction.Transactional;
 
-import io.quarkus.security.PermissionsAllowed;
 import org.jboss.resteasy.reactive.RestResponse;
 import org.jboss.resteasy.reactive.server.ServerExceptionMapper;
 import org.tkit.onecx.chat.domain.daos.ChatDAO;
@@ -30,8 +29,7 @@ import gen.org.tkit.onecx.chat.rs.internal.model.ToolCallClaimResponseDTO;
 import gen.org.tkit.onecx.chat.rs.internal.model.ToolCallContinuationDTO;
 import gen.org.tkit.onecx.chat.rs.internal.model.ToolCallDecisionDTO;
 import gen.org.tkit.onecx.chat.rs.internal.model.ToolCallOutcomeDTO;
-import gen.org.tkit.onecx.chat.rs.internal.model.ToolCallRuntimeReplayDTO;
-import gen.org.tkit.onecx.chat.rs.internal.model.ToolCallSafeSummaryDTO;
+import io.quarkus.security.PermissionsAllowed;
 
 @ApplicationScoped
 @Path("/internal/chats/{chatId}/tool-calls")
@@ -89,7 +87,8 @@ public class ToolCallsRestController {
         }
         ToolCallClaimResponseDTO claim = service.claim(chat, attemptId, request);
         return Response.status(claim.getNewlyGranted()
-                ? Response.Status.CREATED : Response.Status.OK).entity(claim).build();
+                ? Response.Status.CREATED
+                : Response.Status.OK).entity(claim).build();
     }
 
     @POST
