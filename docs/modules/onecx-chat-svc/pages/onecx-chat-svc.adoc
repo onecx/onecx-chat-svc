@@ -30,3 +30,68 @@ Voice turns surface in chat history:
   tenant as its chat, so tenant isolation applies unchanged.
 * Typed chat keeps its own behaviour and payload; no data migration is
   required.
+
+== Tool-call lifecycle
+
+Tool runtimes register policy-evaluated attempts with
+`POST /internal/chats/{chatId}/tool-calls`. The chat service persists the
+attempt and its immutable bindings (tool name, exact arguments, configuration
+snapshot hash, schema hash, argument hash, proposing principal, and runtime);
+policy evaluation and tool invocation remain the runtime's responsibility.
+
+* `DENY` is recorded as a blocked result and cannot be claimed. `ALLOW` is
+  immediately eligible for a claim. `ALWAYS_ASK` is a durable pending proposal
+  that remains pending until explicitly approved or rejected, even while the
+  conversation continues.
+* Decision and execution state are independent. A proposal accepts one atomic
+  terminal decision. Every request, decision, claim, result, and continuation
+  is appended to the same locked, sequence-ordered conversation history.
+* Execution claims are serialized per conversation. A claim is recorded before
+  the runtime is allowed to invoke its tool; only its owner may report an
+  outcome. A claim is not automatically reclaimed after a crash because the
+  external side effect may already have occurred.
+* Safe conversation history and `GET /internal/chats/{chatId}/tool-calls`
+  expose only producer-sanitized summaries. Exact arguments and model-consumed
+  results are available only from the runtime-scoped claim/replay operations.
+  Ordinary message and conversation-entry APIs never project tool data into
+  chat messages.
+* Both AI provider runtimes and Pipecat use the same lifecycle and stable
+  idempotency keys. Runtime producers must sanitize summaries and continuation
+  text before reporting them; the service stores those values but does not
+  interpret or redact tool payloads.
+
+=== Tool-call flow
+
+. **Register the attempt.** The runtime evaluates policy and submits the
+  proposed tool call, including its arguments and policy decision. The service
+  persists the attempt and a `TOOL_REQUEST` event. A `DENY` decision is stored
+  as `BLOCKED` with reason `POLICY_DENIED`, and the service records a
+  `TOOL_RESULT` event without allowing execution. Normally, a denied tool is
+  not offered to the agent; this blocked record is created only if the runtime
+  submits an attempt marked `DENY`.
+. **Resolve user approval when required.** `ALLOW` needs no user decision.
+  `ALWAYS_ASK` creates a pending proposal. The decision operation records the
+  user's approval or rejection. Rejection is
+  distinct from policy denial: it is recorded as decision `REJECTED`, execution
+  `BLOCKED`, and reason `PROPOSAL_REJECTED`.
+. **Claim before executing.** The runtime requests a claim for an eligible
+  attempt. A claim is the service's durable, owner-bound authorization to
+  execute that attempt; it is not the tool execution or its result. The service
+  allows at most one active claim per conversation and records the claim before
+  returning it to the runtime. Only the claim owner can report the outcome.
+  Claims are not automatically reclaimed after a crash because the tool may
+  already have performed an external side effect.
+. **Run the tool and report its outcome.** The runtime invokes the tool, then
+  reports a terminal outcome (`SUCCEEDED`, `FAILED`, or `BLOCKED`) with a
+  producer-sanitized summary and the exact result. The service stores the
+  outcome and adds a `TOOL_RESULT` event. The result is separate from the
+  optional continuation described next.
+. **Append an optional continuation.** After a terminal result, the runtime
+  may append sanitized text that should follow the result in conversation
+  history. This `TOOL_CONTINUATION` event is linked to the same attempt, but
+  it is not the tool's result.
+. **Replay the lifecycle.** The runtime replay operation returns tool events in
+  conversation sequence order, with their causal references and runtime
+  details. It includes exact arguments for request events and the exact result
+  for result events, so the runtime can reconstruct the persisted tool-call
+  history.

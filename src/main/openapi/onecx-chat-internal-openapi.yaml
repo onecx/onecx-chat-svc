@@ -8,6 +8,7 @@ servers:
 tags:
   - name: chatsInternal
   - name: messagesInternal
+  - name: toolCallsInternal
 paths:
   /internal/chats/{chatId}/messages:
     get:
@@ -375,6 +376,282 @@ paths:
                   $ref: '#/components/schemas/ChatConversationEntry'
         "404":
           description: Not found
+  /internal/chats/{chatId}/tool-calls:
+    post:
+      security:
+        - oauth2: [ ocx-chat:tool-runtime ]
+      tags:
+        - toolCallsInternal
+      description: Register a policy-evaluated tool call without invoking it
+      operationId: registerToolCall
+      parameters:
+        - name: chatId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterToolCall'
+      responses:
+        "201":
+          description: Tool call attempt registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToolCallSafeSummary'
+        "400":
+          description: Invalid lifecycle transition or incompatible retry
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetailResponse'
+        "409":
+          description: Lifecycle conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetailResponse'
+        "404":
+          description: Chat not found
+    get:
+      security:
+        - oauth2: [ ocx-chat:all, ocx-chat:read ]
+      tags:
+        - toolCallsInternal
+      description: Return sanitized tool-call summaries in conversation order
+      operationId: getToolCallHistory
+      parameters:
+        - name: chatId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Sanitized tool-call history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ToolCallSafeSummary'
+        "404":
+          description: Chat not found
+  /internal/chats/{chatId}/tool-calls/{attemptId}/decision:
+    post:
+      security:
+        - oauth2: [ ocx-chat:all, ocx-chat:write ]
+      tags:
+        - toolCallsInternal
+      description: Record the single terminal decision for a proposed tool call
+      operationId: decideToolCall
+      parameters:
+        - name: chatId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: attemptId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ToolCallDecision'
+      responses:
+        "200":
+          description: Decision recorded or identical retry
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToolCallSafeSummary'
+        "400":
+          description: Invalid or conflicting decision
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetailResponse'
+        "409":
+          description: Lifecycle conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetailResponse'
+        "404":
+          description: Attempt not found
+  /internal/chats/{chatId}/tool-calls/{attemptId}/claims:
+    post:
+      security:
+        - oauth2: [ ocx-chat:tool-runtime ]
+      tags:
+        - toolCallsInternal
+      description: Atomically claim execution for an eligible attempt
+      operationId: claimToolCall
+      parameters:
+        - name: chatId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: attemptId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ToolCallClaim'
+      responses:
+        "201":
+          description: Execution claim granted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToolCallClaimResponse'
+        "200":
+          description: Idempotent retry; execution is not granted again
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToolCallClaimResponse'
+        "400":
+          description: Attempt cannot be claimed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetailResponse'
+        "409":
+          description: Another claim is active or this attempt cannot be claimed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetailResponse'
+        "404":
+          description: Attempt not found
+  /internal/chats/{chatId}/tool-calls/{attemptId}/outcome:
+    post:
+      security:
+        - oauth2: [ ocx-chat:tool-runtime ]
+      tags:
+        - toolCallsInternal
+      description: Store a sanitized summary and a private model-consumed result
+      operationId: reportToolCallOutcome
+      parameters:
+        - name: chatId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: attemptId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ToolCallOutcome'
+      responses:
+        "200":
+          description: Outcome recorded or identical retry
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToolCallSafeSummary'
+        "400":
+          description: Invalid outcome or claim ownership
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetailResponse'
+        "409":
+          description: Outcome conflicts with the active claim
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetailResponse'
+        "404":
+          description: Attempt not found
+  /internal/chats/{chatId}/tool-calls/{attemptId}/continuations:
+    post:
+      security:
+        - oauth2: [ ocx-chat:tool-runtime ]
+      tags:
+        - toolCallsInternal
+      description: Append a causal continuation after a recorded result
+      operationId: appendToolCallContinuation
+      parameters:
+        - name: chatId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: attemptId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ToolCallContinuation'
+      responses:
+        "201":
+          description: Continuation appended
+        "400":
+          description: Invalid continuation or causal reference
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetailResponse'
+        "409":
+          description: Continuation conflicts with lifecycle state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetailResponse'
+        "404":
+          description: Attempt not found
+  /internal/chats/{chatId}/tool-calls/runtime-replay:
+    get:
+      security:
+        - oauth2: [ ocx-chat:tool-runtime ]
+      tags:
+        - toolCallsInternal
+      description: Return protected runtime replay including private tool inputs and results
+      operationId: getToolCallRuntimeReplay
+      parameters:
+        - name: chatId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Runtime-only replay in conversation sequence order
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ToolCallRuntimeReplay'
+        "404":
+          description: Chat not found
 components:
   securitySchemes:
     oauth2:
@@ -387,6 +664,7 @@ components:
             ocx-chat:read: Grants read access
             ocx-chat:write: Grants write access
             ocx-chat:delete: Grants access to delete operations
+            ocx-chat:tool-runtime: Grants access to report tool calls and retrieve private runtime replay
 
   schemas:
     ChatType:
@@ -807,6 +1085,10 @@ components:
           $ref: '#/components/schemas/ConversationType'
         agentConfigVersion:
           type: string
+        causalReference:
+          type: string
+        eventSnapshot:
+          type: string
         status:
           $ref: '#/components/schemas/EntryStatus'
     ConversationType:
@@ -814,3 +1096,221 @@ components:
       enum:
         - HUMAN
         - ASSISTANT
+        - TOOL_REQUEST
+        - TOOL_DECISION
+        - TOOL_EXECUTION
+        - TOOL_RESULT
+        - TOOL_CONTINUATION
+    ToolCallPolicyDecision:
+      type: string
+      enum:
+        - DENY
+        - ALLOW
+        - ALWAYS_ASK
+    ToolCallDecisionState:
+      type: string
+      enum:
+        - NOT_REQUIRED
+        - PENDING
+        - APPROVED
+        - REJECTED
+    ToolCallExecutionState:
+      type: string
+      enum:
+        - NOT_STARTED
+        - CLAIMED
+        - SUCCEEDED
+        - FAILED
+        - BLOCKED
+    ToolCallTerminalDecision:
+      type: string
+      enum:
+        - APPROVED
+        - REJECTED
+    ToolCallOutcomeState:
+      type: string
+      enum:
+        - SUCCEEDED
+        - FAILED
+    ToolCallBlockedReason:
+      type: string
+      enum:
+        - POLICY_DENIED
+        - PROPOSAL_REJECTED
+    RegisterToolCall:
+      type: object
+      required:
+        - attemptId
+        - idempotencyKey
+        - toolName
+        - arguments
+        - configurationSnapshotHash
+        - schemaHash
+        - argumentHash
+        - proposingPrincipal
+        - runtime
+        - policyDecision
+      properties:
+        attemptId:
+          type: string
+          maxLength: 240
+        idempotencyKey:
+          type: string
+          maxLength: 255
+        toolName:
+          type: string
+          maxLength: 255
+        arguments:
+          type: string
+          description: Exact serialized arguments; returned only by runtime replay
+        configurationSnapshotHash:
+          type: string
+          maxLength: 255
+        schemaHash:
+          type: string
+          maxLength: 255
+        argumentHash:
+          type: string
+          maxLength: 255
+        proposingPrincipal:
+          type: string
+          maxLength: 255
+        runtime:
+          type: string
+          maxLength: 255
+        policyDecision:
+          $ref: '#/components/schemas/ToolCallPolicyDecision'
+        safeSummary:
+          type: string
+          maxLength: 10000
+          description: Producer-sanitized summary; never include private arguments or results
+    ToolCallDecision:
+      type: object
+      required:
+        - idempotencyKey
+        - decision
+      properties:
+        idempotencyKey:
+          type: string
+          maxLength: 255
+        decision:
+          $ref: '#/components/schemas/ToolCallTerminalDecision'
+    ToolCallClaim:
+      type: object
+      required:
+        - idempotencyKey
+      properties:
+        idempotencyKey:
+          type: string
+          maxLength: 255
+    ToolCallOutcome:
+      type: object
+      required:
+        - idempotencyKey
+        - claimId
+        - outcome
+        - safeSummary
+        - exactResult
+      properties:
+        idempotencyKey:
+          type: string
+          maxLength: 255
+        claimId:
+          type: string
+          maxLength: 255
+        outcome:
+          $ref: '#/components/schemas/ToolCallOutcomeState'
+        safeSummary:
+          type: string
+          maxLength: 10000
+        exactResult:
+          type: string
+          description: Exact model-consumed result; returned only by runtime replay
+    ToolCallContinuation:
+      type: object
+      required:
+        - idempotencyKey
+        - resultAttemptId
+        - runtime
+        - content
+      properties:
+        idempotencyKey:
+          type: string
+          maxLength: 255
+        resultAttemptId:
+          type: string
+          maxLength: 240
+        runtime:
+          type: string
+          maxLength: 255
+        content:
+          type: string
+          maxLength: 10000
+          description: Producer-sanitized continuation content safe for conversation history
+    ToolCallSafeSummary:
+      type: object
+      properties:
+        attemptId:
+          type: string
+        toolName:
+          type: string
+        safeSummary:
+          type: string
+        policyDecision:
+          $ref: '#/components/schemas/ToolCallPolicyDecision'
+        decisionState:
+          $ref: '#/components/schemas/ToolCallDecisionState'
+        executionState:
+          $ref: '#/components/schemas/ToolCallExecutionState'
+        blockedReason:
+          $ref: '#/components/schemas/ToolCallBlockedReason'
+        sequenceNumber:
+          type: integer
+          format: int64
+        runtime:
+          type: string
+    ToolCallClaimResponse:
+      type: object
+      properties:
+        attemptId:
+          type: string
+        claimId:
+          type: string
+        owner:
+          type: string
+        arguments:
+          type: string
+        newlyGranted:
+          type: boolean
+    ToolCallRuntimeReplay:
+      type: object
+      properties:
+        attemptId:
+          type: string
+        sequenceNumber:
+          type: integer
+          format: int64
+        eventIdempotencyKey:
+          type: string
+        eventType:
+          type: string
+        causalReference:
+          type: string
+        eventSnapshot:
+          type: string
+        safeSummary:
+          type: string
+        toolName:
+          type: string
+        arguments:
+          type: string
+        configurationSnapshotHash:
+          type: string
+        schemaHash:
+          type: string
+        argumentHash:
+          type: string
+        exactResult:
+          type: string
+        runtime:
+          type: string
