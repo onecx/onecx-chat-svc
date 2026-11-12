@@ -1,6 +1,6 @@
 package org.tkit.onecx.chat.rs.internal.services;
 
-import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
@@ -288,7 +288,7 @@ class ConversationEntryServiceTest {
     }
 
     @Test
-    void createOrUpdateCreatesMessageWhenEntryIsTerminalOnFirstCreate() {
+    void createOrUpdateStoresTerminalMessageOnlyAsConversationEntry() {
         var chat = new Chat();
         chat.setId("chat-id");
 
@@ -307,16 +307,17 @@ class ConversationEntryServiceTest {
 
         service.createOrUpdate(chat, dto);
 
-        var captor = ArgumentCaptor.forClass(Message.class);
-        verify(msgDao, times(1)).create(captor.capture());
-        var message = captor.getValue();
-        assertThat(message.getType()).isEqualTo(Message.MessageType.HUMAN);
-        assertThat(message.getText()).isEqualTo("Hello");
-        assertSame(chat, message.getChat());
+        var captor = ArgumentCaptor.forClass(ConversationEntry.class);
+        verify(dao).create(captor.capture());
+        var entry = captor.getValue();
+        assertThat(entry.getType()).isEqualTo(ConversationEntry.EntryType.HUMAN);
+        assertThat(entry.getStatus()).isEqualTo(ConversationEntry.EntryStatus.COMPLETED);
+        assertThat(entry.getText()).isEqualTo("Hello");
+        verify(msgDao, never()).create(any(Message.class));
     }
 
     @Test
-    void createOrUpdateCreatesMessageWhenEntryTransitionsToCompleted() {
+    void createOrUpdateDoesNotCreateLegacyMessageWhenEntryTransitionsToCompleted() {
         var chat = new Chat();
         chat.setId("chat-id");
         var dto = assistantEntryRequest("entry", "agent-config-1");
@@ -333,16 +334,11 @@ class ConversationEntryServiceTest {
 
         service.createOrUpdate(chat, dto);
 
-        var captor = ArgumentCaptor.forClass(Message.class);
-        verify(msgDao, times(1)).create(captor.capture());
-        var message = captor.getValue();
-        assertThat(message.getType()).isEqualTo(Message.MessageType.ASSISTANT);
-        assertThat(message.getText()).isEqualTo("Hello");
-        assertSame(chat, message.getChat());
+        verify(msgDao, never()).create(any(Message.class));
     }
 
     @Test
-    void createOrUpdateCreatesMessageWhenEntryTransitionsToInterrupted() {
+    void createOrUpdateDoesNotCreateLegacyMessageWhenEntryTransitionsToInterrupted() {
         var chat = new Chat();
         chat.setId("chat-id");
         var dto = assistantEntryRequest("entry", "agent-config-1");
@@ -359,7 +355,7 @@ class ConversationEntryServiceTest {
 
         service.createOrUpdate(chat, dto);
 
-        verify(msgDao, times(1)).create(any(Message.class));
+        verify(msgDao, never()).create(any(Message.class));
     }
 
     @Test
@@ -450,6 +446,114 @@ class ConversationEntryServiceTest {
         service.createOrUpdate(chat, dto);
 
         verify(msgDao, never()).create(any(Message.class));
+    }
+
+    @Test
+    void assistantResponseRetryForSameRequestDoesNotCreateAnotherEntry() {
+        var chat = new Chat();
+        chat.setId("chat-id");
+        var existing = new ConversationEntry();
+        existing.setType(ConversationEntry.EntryType.TEXT);
+        existing.setMessageType(Message.MessageType.ASSISTANT);
+        existing.setStatus(ConversationEntry.EntryStatus.COMPLETED);
+        existing.setText("Answer");
+
+        when(dao.findByChatAndIdempotencyKey(chat, "ai-response:request-1")).thenReturn(Optional.of(existing));
+
+        assertSame(existing, service.createAssistantResponse(chat, "request-1", "Answer"));
+
+        verify(dao, never()).create(any(ConversationEntry.class));
+        verify(msgDao, never()).create(any(Message.class));
+    }
+
+    @Test
+    void assistantResponseIsStoredAsCompletedTextEntryWithStableKey() {
+        var chat = new Chat();
+        chat.setId("chat-id");
+        when(dao.findByChatAndIdempotencyKey(chat, "ai-response:request-1")).thenReturn(Optional.empty());
+        when(dao.findMaxSequenceByChat(chat)).thenReturn(0L);
+
+        var result = service.createAiResponse(chat, "request-1", Message.MessageType.ASSISTANT, "Answer", null);
+
+        assertThat(result.getType()).isEqualTo(ConversationEntry.EntryType.TEXT);
+        assertThat(result.getMessageType()).isEqualTo(Message.MessageType.ASSISTANT);
+        assertThat(result.getStatus()).isEqualTo(ConversationEntry.EntryStatus.COMPLETED);
+        assertThat(result.getIdempotencyKey()).isEqualTo("ai-response:request-1");
+    }
+
+    @Test
+    void typedMessageEntryIsCompletedAndRetainsUserId() {
+        var chat = new Chat();
+        chat.setId("chat-id");
+        var message = new Message();
+        message.setType(Message.MessageType.HUMAN);
+        message.setText("Hello");
+        message.setUserId("user-1");
+        when(dao.findMaxSequenceByChat(chat)).thenReturn(2L);
+
+        service.createTypedMessage(chat, message);
+
+        var captor = ArgumentCaptor.forClass(ConversationEntry.class);
+        verify(dao).create(captor.capture());
+        var entry = captor.getValue();
+        assertThat(entry.getSequence()).isEqualTo(3L);
+        assertThat(entry.getType()).isEqualTo(ConversationEntry.EntryType.TEXT);
+        assertThat(entry.getMessageType()).isEqualTo(Message.MessageType.HUMAN);
+        assertThat(entry.getStatus()).isEqualTo(ConversationEntry.EntryStatus.COMPLETED);
+        assertThat(entry.getText()).isEqualTo("Hello");
+        assertThat(entry.getUserId()).isEqualTo("user-1");
+        verify(msgDao, never()).create(any(Message.class));
+    }
+
+    @Test
+    void currentMessagesSuppressesLegacyDuplicatesAndKeepsSystemMessages() {
+        var chat = new Chat();
+        chat.setId("chat-id");
+        var entry = new ConversationEntry();
+        entry.setText("typed text");
+        entry.setId("entry-id");
+        entry.setType(ConversationEntry.EntryType.TEXT);
+        entry.setMessageType(Message.MessageType.HUMAN);
+        entry.setStatus(ConversationEntry.EntryStatus.COMPLETED);
+        var entryMessage = new Message();
+        entryMessage.setId("entry-id");
+        entryMessage.setType(Message.MessageType.HUMAN);
+        entryMessage.setText("typed text");
+        entryMessage.setUserId("user-1");
+
+        var voiceEntry = new ConversationEntry();
+        voiceEntry.setType(ConversationEntry.EntryType.HUMAN);
+        voiceEntry.setStatus(ConversationEntry.EntryStatus.COMPLETED);
+        voiceEntry.setText("voice text");
+        voiceEntry.setLegacyMessageId("voice-message-id");
+        var voiceMessage = new Message();
+        voiceMessage.setId("voice-message-id");
+        voiceMessage.setType(Message.MessageType.HUMAN);
+        voiceMessage.setText("voice text");
+
+        var legacyDuplicate = new Message();
+        legacyDuplicate.setId("entry-id");
+        legacyDuplicate.setType(Message.MessageType.HUMAN);
+        legacyDuplicate.setText("typed text");
+        legacyDuplicate.setUserId("user-1");
+        var systemMessage = new Message();
+        systemMessage.setId("system-id");
+        systemMessage.setType(Message.MessageType.SYSTEM);
+        var legacyMessage = new Message();
+        legacyMessage.setId("old-id");
+        legacyMessage.setType(Message.MessageType.HUMAN);
+        legacyMessage.setText("typed text");
+        legacyMessage.setUserId("user-1");
+
+        when(dao.findReplayEntries(chat)).thenReturn(java.util.List.of(entry, voiceEntry));
+        when(chatMapper.mapEntryAsMessage(entry)).thenReturn(entryMessage);
+        when(msgDao.findMessagesByChat(chat))
+                .thenReturn(java.util.List.of(legacyDuplicate, voiceMessage, systemMessage, legacyMessage));
+
+        var messages = service.currentMessages(chat);
+
+        assertThat(messages).containsExactlyInAnyOrder(entryMessage, voiceMessage, systemMessage, legacyMessage);
+        verify(chatMapper, never()).mapEntryAsMessage(voiceEntry);
     }
 
     private static CreateOrUpdateConversationEntryDTO assistantEntryRequest(String idempotencyKey,

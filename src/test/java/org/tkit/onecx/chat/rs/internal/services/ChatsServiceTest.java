@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.tkit.onecx.chat.domain.daos.MessageDAO;
 import org.tkit.onecx.chat.domain.models.Chat;
+import org.tkit.onecx.chat.domain.models.ConversationEntry;
 import org.tkit.onecx.chat.domain.models.Message;
 import org.tkit.onecx.chat.rs.internal.mappers.ChatMapper;
 
@@ -36,6 +37,9 @@ class ChatsServiceTest {
 
     @InjectMock
     MessageDAO msgDao;
+
+    @InjectMock
+    ConversationEntryService conversationEntryService;
 
     @InjectMock
     Event<AsyncAiProcessingRequest> asyncAiProcessingRequestEvent;
@@ -61,9 +65,12 @@ class ChatsServiceTest {
 
         var createdMessage = new Message();
         createdMessage.setId("msg-id");
+        createdMessage.setType(Message.MessageType.HUMAN);
+        var entry = new ConversationEntry();
 
         when(mapper.createMessage(dto)).thenReturn(createdMessage);
-        when(msgDao.create(createdMessage)).thenReturn(createdMessage);
+        when(conversationEntryService.createTypedMessage(chat, createdMessage)).thenReturn(entry);
+        when(mapper.mapEntryAsMessage(entry)).thenReturn(createdMessage);
 
         RequestContext requestContext = new RequestContext();
         requestContext.setAiContext(List.of("test"));
@@ -75,6 +82,8 @@ class ChatsServiceTest {
 
         Assertions.assertNotNull(result);
         Assertions.assertEquals("msg-id", result.getId());
+        verify(conversationEntryService).createTypedMessage(chat, createdMessage);
+        verify(msgDao, org.mockito.Mockito.never()).create(createdMessage);
         await().atMost(Duration.ofSeconds(2))
                 .untilAsserted(() -> verify(asyncAiProcessingRequestEvent)
                         .fire(new AsyncAiProcessingRequest("chat-id", "msg-id", requestContext, apmPrincipalToken,

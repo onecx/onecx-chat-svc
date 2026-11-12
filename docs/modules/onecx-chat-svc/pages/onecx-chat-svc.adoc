@@ -1,12 +1,16 @@
 == Conversation Entries
 
-Conversation Entries provide an idempotent, sequence-ordered persistence model
-alongside chat messages. Internal runtimes create or update an entry with
-`PUT /internal/chats/{chatId}/conversation-entries` and an idempotency key.
+Conversation Entries provide the sequence-ordered persistence model for chat
+history. Typed chat messages and AI replies are stored as `TEXT` entries with a
+separate message role (`HUMAN`, `ASSISTANT`, or `SYSTEM`) and
+`COMPLETED` status. Their stable sequence is the ordering source for replay.
 
-* Each entry has a required `type`: `HUMAN` or `ASSISTANT`.
-* The first write assigns a stable, per-chat sequence number. Later updates keep
-  that number unchanged.
+Internal runtimes create or update voice entries with
+`PUT /internal/chats/{chatId}/conversation-entries` and an idempotency key.
+Voice entries retain their `HUMAN` or `ASSISTANT` type.
+Migrated system messages are exposed with the `SYSTEM` role.
+
+* The first write assigns a stable, per-chat sequence number; updates retain it.
 * `IN_PROGRESS` text may only grow by prefix; identical retries are no-ops and
   incompatible retries return a conflict.
 * `COMPLETED` and `INTERRUPTED` entries are terminal and cannot be modified.
@@ -14,19 +18,28 @@ alongside chat messages. Internal runtimes create or update an entry with
   `agentConfigVersion` is stored with an entry, may be set once while the entry
   is non-terminal, and cannot subsequently change.
 * `GET /internal/chats/{chatId}/conversation-entries` returns terminal entries
-  in ascending sequence order. It excludes `IN_PROGRESS` entries and includes
-  each entry's type and agent configuration version.
+  in ascending sequence order. It excludes `IN_PROGRESS` entries and returns
+  the role of each `TEXT` entry as its message type.
 
-Voice turns surface in chat history:
+The Liquibase message migration:
 
-* When a Conversation Entry first reaches `COMPLETED` or `INTERRUPTED` with
-  non-empty text, exactly one chat `Message` of the matching type (`HUMAN` or
-  `ASSISTANT`) is created in the same transaction. Retries and no-op updates of
-  the same entry never create a duplicate message.
-* Those messages are regular chat messages, so the existing message endpoints
-  (`GET /internal/chats/{chatId}/messages` and
-  `POST /internal/chats/messages/search`) return them ordered together with
-  typed messages by creation date. The created message is scoped to the same
-  tenant as its chat, so tenant isolation applies unchanged.
-* Typed chat keeps its own behaviour and payload; no data migration is
-  required.
+* Backfills existing `HUMAN`, `ASSISTANT`, and `SYSTEM` message rows as
+  `TEXT` entries, preserving IDs, role, user ID, audit values, version, and
+  tenant ownership. Sequences follow creation date (`NULLS LAST`) and message
+  ID, after any pre-existing entries in the chat.
+* Requires legacy message writers to be stopped during cutover so older
+  application instances do not add unsequenced rows after the backfill.
+* Uses a stable `legacy-message:<id>` idempotency key and retains the original
+  `MESSAGE` rows. Existing voice mirrors are linked by message ID; ambiguous
+  ownership, mirror, or ordering conflicts stop migration rather than being
+  discarded.
+* New typed messages and AI replies are written only as entries. AI retries use
+  the originating message ID as an idempotency key and do not dispatch again
+  when the response entry already exists.
+
+The existing message endpoints (`GET /internal/chats/{chatId}/messages` and
+`POST /internal/chats/messages/search`) continue returning `Message` payloads
+with their original roles, audit fields, and creation-date ordering. They merge
+entries with retained legacy rows by message ID and preserve pagination and
+tenant isolation. Voice entries remain visible as messages once terminal and
+non-blank, without a second `MESSAGE` row.

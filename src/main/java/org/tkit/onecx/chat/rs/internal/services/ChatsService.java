@@ -44,6 +44,9 @@ public class ChatsService {
     @Inject
     AsyncAiProcessingService asyncAiProcessingService;
 
+    @Inject
+    ConversationEntryService conversationEntryService;
+
     @Transactional
     public Chat createChat(CreateChatDTO createChatDTO) {
         var chat = mapper.create(createChatDTO);
@@ -63,6 +66,10 @@ public class ChatsService {
 
     @Transactional
     public void deleteChat(String id) {
+        var chat = dao.findById(id);
+        if (chat != null) {
+            conversationEntryService.deleteByChat(chat);
+        }
         dao.deleteQueryById(id);
     }
 
@@ -76,8 +83,13 @@ public class ChatsService {
     public Message createChatMessage(Chat chat, CreateMessageDTO createMessageDTO, String apmPrincipalToken,
             String userAuthorization) {
         var message = mapper.createMessage(createMessageDTO);
-        message.setChat(chat);
-        message = msgDao.create(message);
+        if (message.getType() != null) {
+            var entry = conversationEntryService.createTypedMessage(chat, message);
+            message = mapper.mapEntryAsMessage(entry);
+        } else {
+            message.setChat(chat);
+            message = msgDao.create(message);
+        }
 
         var aiContext = mapper.mapContext(createMessageDTO.getRequestContext());
         var skipAiProcessing = Optional.ofNullable(createMessageDTO.getSkipAIProcessing()).orElse(false);

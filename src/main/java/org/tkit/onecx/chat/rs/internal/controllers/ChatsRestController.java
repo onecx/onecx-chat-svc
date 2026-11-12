@@ -20,7 +20,6 @@ import org.jboss.resteasy.reactive.ClientWebApplicationException;
 import org.jboss.resteasy.reactive.RestResponse;
 import org.jboss.resteasy.reactive.server.ServerExceptionMapper;
 import org.tkit.onecx.chat.domain.daos.ChatDAO;
-import org.tkit.onecx.chat.domain.daos.MessageDAO;
 import org.tkit.onecx.chat.domain.daos.ParticipantDAO;
 import org.tkit.onecx.chat.domain.models.Chat;
 import org.tkit.onecx.chat.domain.models.ConversationEntry;
@@ -50,9 +49,6 @@ public class ChatsRestController implements ChatsInternalApi {
 
     @Inject
     ChatDAO dao;
-
-    @Inject
-    MessageDAO msgDao;
 
     @Inject
     ParticipantDAO participantDao;
@@ -150,23 +146,31 @@ public class ChatsRestController implements ChatsInternalApi {
     public Response getChatMessages(String chatId) {
         var chat = dao.findById(chatId);
 
-        if (chat == null || chat.getMessages().isEmpty()) {
-            // Handle the case where chat or its messages are null
+        if (chat == null) {
             return Response.status(Response.Status.NOT_FOUND).build();
         }
 
-        var messages = chat.getMessages();
-        List<Message> messageList = new ArrayList<>(messages);
+        List<Message> messageList = conversationEntryService.currentMessages(chat);
+        if (messageList.isEmpty()) {
+            return Response.status(Response.Status.NOT_FOUND).build();
+        }
         return Response.ok(mapper.mapMessageList(messageList)).build();
 
     }
 
     @Override
-    public Response searchChatMessages(ChatMessageSearchCriteriaDTO chatMessageSearchCriteriaDTO) {
+    public Response searchChatMessages(@Valid ChatMessageSearchCriteriaDTO chatMessageSearchCriteriaDTO) {
         var criteria = mapper.map(chatMessageSearchCriteriaDTO);
-        var msgResult = msgDao.findChatMessagesByCriteria(criteria);
+        var chat = dao.findById(criteria.getChatId());
+        var allMessages = chat == null ? List.<Message> of() : conversationEntryService.currentMessages(chat);
+        var pageNumber = Math.max(0, criteria.getPageNumber() == null ? 0 : criteria.getPageNumber());
+        var pageSize = Math.max(1, criteria.getPageSize() == null ? 20 : criteria.getPageSize());
+        var fromIndex = (int) Math.min(allMessages.size(), (long) pageNumber * pageSize);
+        var toIndex = (int) Math.min(allMessages.size(), (long) fromIndex + pageSize);
+        var pageMessages = allMessages.subList(fromIndex, toIndex);
         List<Participant> participantsResult = participantDao.getParticipantsOfChatById(criteria.getChatId());
-        return Response.ok(mapper.mapResponse(participantsResult, msgResult)).build();
+        return Response.ok(mapper.mapResponse(participantsResult, pageMessages, pageNumber, pageSize,
+                allMessages.size())).build();
     }
 
     @Override
