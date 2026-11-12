@@ -3,6 +3,7 @@ package org.tkit.onecx.chat.rs.internal.services;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -10,7 +11,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.security.Principal;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import jakarta.inject.Inject;
@@ -27,6 +30,7 @@ import org.tkit.onecx.chat.domain.models.ToolCall;
 import gen.org.tkit.onecx.chat.rs.internal.model.RegisterToolCallDTO;
 import gen.org.tkit.onecx.chat.rs.internal.model.ToolCallClaimDTO;
 import gen.org.tkit.onecx.chat.rs.internal.model.ToolCallDecisionDTO;
+import gen.org.tkit.onecx.chat.rs.internal.model.ToolCallContinuationDTO;
 import gen.org.tkit.onecx.chat.rs.internal.model.ToolCallOutcomeDTO;
 import gen.org.tkit.onecx.chat.rs.internal.model.ToolCallPolicyDecisionDTO;
 import gen.org.tkit.onecx.chat.rs.internal.model.ToolCallTerminalDecisionDTO;
@@ -220,27 +224,88 @@ class ToolCallServiceTest {
     }
 
     @Test
-    void runtimeReplayUsesEntryOrderAndReturnsExactResultOnlyOnResultEvent() {
-        ToolCall call = pendingAttempt();
-        call.setArguments("{\"private\":\"arguments\"}");
-        call.setExactResult("{\"private\":\"result\"}");
-        ConversationEntry request = toolEvent(1L, ConversationEntry.EntryType.TOOL_REQUEST, "request");
-        ConversationEntry result = toolEvent(2L, ConversationEntry.EntryType.TOOL_RESULT, "result");
-        when(toolCallDAO.findByChat(chat)).thenReturn(List.of(call));
-        when(conversationEntryDAO.findReplayEntries(chat)).thenReturn(List.of(request, result));
+    void runtimeReplayPreservesMixedRuntimeLifecycleOrderAndHidesExactResults() {
+        ToolCall providerCall = pendingAttempt();
+        providerCall.setArguments("{\"private\":\"provider-arguments\"}");
+        providerCall.setRuntime("provider-runtime");
+        ToolCall pipecatCall = pendingAttempt();
+        pipecatCall.setAttemptId("attempt-2");
+        pipecatCall.setArguments("{\"private\":\"pipecat-arguments\"}");
+        pipecatCall.setExactResult("{\"private\":\"pipecat-result\"}");
+        pipecatCall.setRuntime("pipecat");
+        List<ConversationEntry> entries = List.of(
+                toolEvent(1L, ConversationEntry.EntryType.TOOL_REQUEST, "request-provider", "attempt-1"),
+                toolEvent(2L, ConversationEntry.EntryType.TOOL_DECISION, "decision-provider", "attempt-1"),
+                toolEvent(3L, ConversationEntry.EntryType.TOOL_REQUEST, "request-pipecat", "attempt-2"),
+                toolEvent(4L, ConversationEntry.EntryType.TOOL_EXECUTION, "execution-pipecat", "attempt-2"),
+                toolEvent(5L, ConversationEntry.EntryType.TOOL_RESULT, "result-pipecat", "attempt-2"),
+                toolEvent(6L, ConversationEntry.EntryType.TOOL_CONTINUATION, "continuation-pipecat", "attempt-2"));
+        when(toolCallDAO.findByChat(chat)).thenReturn(List.of(providerCall, pipecatCall));
+        when(conversationEntryDAO.findReplayEntries(chat)).thenReturn(entries);
 
         var replay = service.runtimeReplay(chat);
 
-        assertThat(replay).hasSize(2);
+        assertThat(replay).hasSize(6);
         assertThat(replay.get(0).getSequenceNumber()).isEqualTo(1L);
-        assertThat(replay.get(0).getArguments()).isEqualTo("{\"private\":\"arguments\"}");
+        assertThat(replay.get(0).getEventType()).isEqualTo("TOOL_REQUEST");
+        assertThat(replay.get(0).getRuntime()).isEqualTo("provider-runtime");
+        assertThat(replay.get(0).getArguments()).isEqualTo("{\"private\":\"provider-arguments\"}");
         assertThat(replay.get(0).getExactResult()).isNull();
         assertThat(replay.get(1).getSequenceNumber()).isEqualTo(2L);
-        assertThat(replay.get(1).getExactResult()).isEqualTo("{\"private\":\"result\"}");
+        assertThat(replay.get(1).getEventType()).isEqualTo("TOOL_DECISION");
+        assertThat(replay.get(2).getSequenceNumber()).isEqualTo(3L);
+        assertThat(replay.get(2).getEventType()).isEqualTo("TOOL_REQUEST");
+        assertThat(replay.get(2).getRuntime()).isEqualTo("pipecat");
+        assertThat(replay.get(2).getArguments()).isEqualTo("{\"private\":\"pipecat-arguments\"}");
+        assertThat(replay.get(3).getSequenceNumber()).isEqualTo(4L);
+        assertThat(replay.get(3).getEventType()).isEqualTo("TOOL_EXECUTION");
+        assertThat(replay.get(4).getSequenceNumber()).isEqualTo(5L);
+        assertThat(replay.get(4).getEventType()).isEqualTo("TOOL_RESULT");
+        assertThat(replay.get(4).getExactResult()).isEqualTo("{\"private\":\"pipecat-result\"}");
+        assertThat(replay.get(5).getSequenceNumber()).isEqualTo(6L);
+        assertThat(replay.get(5).getEventType()).isEqualTo("TOOL_CONTINUATION");
+        assertThat(replay.get(5).getRuntime()).isEqualTo("pipecat");
         var inOrder = inOrder(chatDAO, toolCallDAO, conversationEntryDAO);
         inOrder.verify(chatDAO).lock("chat-1");
         inOrder.verify(toolCallDAO).findByChat(chat);
         inOrder.verify(conversationEntryDAO).findReplayEntries(chat);
+    }
+
+    @Test
+    void continuationIsAppendedAfterTerminalResultAndRetriesAreIdempotent() {
+        ToolCall call = pendingAttempt();
+        when(toolCallDAO.findByChatAndAttemptId(chat, "attempt-1")).thenReturn(Optional.of(call));
+        Map<String, ConversationEntry> entries = new HashMap<>();
+        when(conversationEntryDAO.findByChatAndIdempotencyKey(any(), anyString())).thenAnswer(invocation ->
+                Optional.ofNullable(entries.get(invocation.getArgument(1))));
+        when(conversationEntryDAO.create(any(ConversationEntry.class))).thenAnswer(invocation -> {
+            ConversationEntry created = invocation.getArgument(0);
+            entries.put(created.getIdempotencyKey(), created);
+            return created;
+        });
+        ToolCallContinuationDTO continuation = new ToolCallContinuationDTO();
+        continuation.setIdempotencyKey("continuation-1");
+        continuation.setResultAttemptId("attempt-1");
+        continuation.setRuntime("pipecat");
+        continuation.setContent("Continue with the search results");
+
+        assertThrows(IdempotencyConflictException.class,
+                () -> service.appendContinuation(chat, "attempt-1", continuation));
+        call.setExecutionState(ToolCall.ExecutionState.SUCCEEDED);
+        service.appendContinuation(chat, "attempt-1", continuation);
+        service.appendContinuation(chat, "attempt-1", continuation);
+
+        assertThat(entries).hasSize(1);
+        ConversationEntry entry = entries.values().iterator().next();
+        assertThat(entry.getType()).isEqualTo(ConversationEntry.EntryType.TOOL_CONTINUATION);
+        assertThat(entry.getCausalReference()).isEqualTo("attempt-1");
+        assertThat(entry.getText()).isEqualTo("Continue with the search results");
+        assertThat(entry.getEventSnapshot()).contains("\"runtime\":\"pipecat\"");
+        verify(conversationEntryDAO).create(any(ConversationEntry.class));
+
+        continuation.setContent("Changed continuation");
+        assertThrows(IdempotencyConflictException.class,
+                () -> service.appendContinuation(chat, "attempt-1", continuation));
     }
 
     private ToolCall pendingAttempt() {
@@ -256,12 +321,13 @@ class ToolCallServiceTest {
         return call;
     }
 
-    private ConversationEntry toolEvent(long sequence, ConversationEntry.EntryType type, String key) {
+    private ConversationEntry toolEvent(long sequence, ConversationEntry.EntryType type, String key,
+            String attemptId) {
         ConversationEntry entry = new ConversationEntry();
         entry.setSequence(sequence);
         entry.setType(type);
         entry.setIdempotencyKey(key);
-        entry.setCausalReference("attempt-1");
+        entry.setCausalReference(attemptId);
         entry.setText(key);
         return entry;
     }
