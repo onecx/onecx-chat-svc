@@ -144,10 +144,12 @@ public class ConversationEntryService {
         return entry;
     }
 
+    @Transactional
     public boolean hasAiResponse(Chat chat, String requestMessageId) {
         return dao.findByChatAndIdempotencyKey(chat, "ai-response:" + requestMessageId).isPresent();
     }
 
+    @Transactional
     public List<Message> currentMessages(Chat chat) {
         var entries = dao.findReplayEntries(chat);
         var legacyMessages = messageDAO.findMessagesByChat(chat);
@@ -186,14 +188,15 @@ public class ConversationEntryService {
             }
         }
         orderedMessages.sort(Comparator
-                .comparing(OrderedMessage::sequence, Comparator.nullsLast(Comparator.naturalOrder()))
-                .thenComparing(message -> message.message().getCreationDate(),
+                .comparing((OrderedMessage message) -> message.message().getCreationDate(),
                         Comparator.nullsLast(Comparator.naturalOrder()))
+                .thenComparing(OrderedMessage::sequence, Comparator.nullsLast(Comparator.naturalOrder()))
                 .thenComparing(message -> message.message().getId(),
                         Comparator.nullsLast(Comparator.naturalOrder())));
         return orderedMessages.stream().map(OrderedMessage::message).toList();
     }
 
+    @Transactional
     public Message findMessageById(Chat chat, String id) {
         var entry = dao.findById(id);
         if (entry == null || entry.getChat() == null || !Objects.equals(entry.getChat().getId(), chat.getId())

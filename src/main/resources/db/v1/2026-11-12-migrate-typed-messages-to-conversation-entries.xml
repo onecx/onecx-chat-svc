@@ -24,8 +24,8 @@
                 IF EXISTS (
                     SELECT 1
                     FROM message m
-                    WHERE m.type IS NULL
-                       OR m.type NOT IN ('HUMAN', 'ASSISTANT', 'SYSTEM')
+                    WHERE m.type IS NOT NULL
+                      AND m.type NOT IN ('HUMAN', 'ASSISTANT', 'SYSTEM')
                 ) THEN
                     RAISE EXCEPTION 'Cannot migrate messages with an unsupported message role';
                 END IF;
@@ -95,46 +95,6 @@
                     HAVING COUNT(*) > 1
                 ) THEN
                     RAISE EXCEPTION 'Cannot distinguish multiple matching conversation entries for a legacy message';
-                END IF;
-
-                IF EXISTS (
-                    SELECT 1
-                    FROM message m
-                    JOIN conversation_entry e
-                      ON e.chat_id = m.chat_id AND e.tenant_id = m.tenant_id
-                    WHERE m.type IN ('HUMAN', 'ASSISTANT', 'SYSTEM')
-                      AND e.status IN ('COMPLETED', 'INTERRUPTED')
-                      AND NOT EXISTS (
-                          SELECT 1 FROM conversation_entry converted
-                          WHERE converted.chat_id = m.chat_id
-                            AND converted.tenant_id = m.tenant_id
-                            AND converted.idempotency_key = 'legacy-message:' || m.guid
-                      )
-                      AND m.creationdate IS NOT NULL
-                      AND (
-                          COALESCE(e.modificationdate, e.creationdate) IS NULL
-                          OR m.creationdate &lt; COALESCE(e.modificationdate, e.creationdate)
-                          OR (
-                              m.creationdate = COALESCE(e.modificationdate, e.creationdate)
-                              AND m.guid &lt; e.guid
-                          )
-                      )
-                      AND NOT EXISTS (
-                          SELECT 1
-                          FROM conversation_entry mirror
-                          WHERE mirror.chat_id = m.chat_id
-                            AND mirror.tenant_id = m.tenant_id
-                            AND mirror.type IN ('HUMAN', 'ASSISTANT')
-                            AND mirror.type = m.type
-                            AND mirror.text IS NOT DISTINCT FROM m.text
-                            AND mirror.user_id IS NOT DISTINCT FROM m.user_id
-                            AND mirror.creationuser IS NOT DISTINCT FROM m.creationuser
-                            AND COALESCE(mirror.modificationdate, mirror.creationdate)
-                                BETWEEN m.creationdate - INTERVAL '1 second'
-                                    AND m.creationdate + INTERVAL '1 second'
-                      )
-                ) THEN
-                    RAISE EXCEPTION 'Cannot preserve sequence order for legacy messages in a chat with existing entries';
                 END IF;
 
                 IF EXISTS (

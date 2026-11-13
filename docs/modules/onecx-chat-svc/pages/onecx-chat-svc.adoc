@@ -31,15 +31,18 @@ The Liquibase message migration:
   application instances do not add unsequenced rows after the backfill.
 * Uses a stable `legacy-message:<id>` idempotency key and retains the original
   `MESSAGE` rows. Existing voice mirrors are linked by message ID; ambiguous
-  ownership, mirror, or ordering conflicts stop migration rather than being
-  discarded.
-* New typed messages and AI replies are written only as entries. AI retries use
-  the originating message ID as an idempotency key and do not dispatch again
-  when the response entry already exists.
+  ownership or mirror conflicts stop migration rather than being discarded.
+  Rows with a null message type, such as AI `ACTION` responses, remain in the
+  legacy `MESSAGE` table because they have no supported conversation-entry role.
+* New typed messages and `HUMAN`/`ASSISTANT` AI replies are written only as
+  entries. AI retries use the originating message ID as an idempotency key and
+  do not dispatch again when the response entry already exists. `ACTION`
+  responses remain legacy messages.
 
 The existing message endpoints (`GET /internal/chats/{chatId}/messages` and
 `POST /internal/chats/messages/search`) continue returning `Message` payloads
 with their original roles, audit fields, and creation-date ordering. They merge
 entries with retained legacy rows by message ID and preserve pagination and
-tenant isolation. Voice entries remain visible as messages once terminal and
-non-blank, without a second `MESSAGE` row.
+tenant isolation. Creation date determines the merged message order; sequence
+is used only to break ties. Voice entries remain visible as messages once
+terminal and non-blank, without a second `MESSAGE` row.

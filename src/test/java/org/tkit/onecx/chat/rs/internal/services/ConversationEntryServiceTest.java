@@ -9,6 +9,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 import jakarta.inject.Inject;
@@ -554,6 +555,35 @@ class ConversationEntryServiceTest {
 
         assertThat(messages).containsExactlyInAnyOrder(entryMessage, voiceMessage, systemMessage, legacyMessage);
         verify(chatMapper, never()).mapEntryAsMessage(voiceEntry);
+    }
+
+    @Test
+    void currentMessagesOrdersRetainedLegacyMessagesByCreationDate() {
+        var chat = new Chat();
+        chat.setId("chat-id");
+
+        var typedEntry = new ConversationEntry();
+        typedEntry.setId("typed-entry");
+        typedEntry.setType(ConversationEntry.EntryType.TEXT);
+        typedEntry.setMessageType(Message.MessageType.HUMAN);
+        typedEntry.setStatus(ConversationEntry.EntryStatus.COMPLETED);
+        typedEntry.setSequence(2L);
+
+        var typedMessage = new Message();
+        typedMessage.setId("typed-entry");
+        typedMessage.setType(Message.MessageType.HUMAN);
+        typedMessage.setCreationDate(LocalDateTime.parse("2026-11-12T12:00:00"));
+
+        var legacySystemMessage = new Message();
+        legacySystemMessage.setId("legacy-system");
+        legacySystemMessage.setType(Message.MessageType.SYSTEM);
+        legacySystemMessage.setCreationDate(LocalDateTime.parse("2026-11-12T11:00:00"));
+
+        when(dao.findReplayEntries(chat)).thenReturn(java.util.List.of(typedEntry));
+        when(chatMapper.mapEntryAsMessage(typedEntry)).thenReturn(typedMessage);
+        when(msgDao.findMessagesByChat(chat)).thenReturn(java.util.List.of(legacySystemMessage));
+
+        assertThat(service.currentMessages(chat)).containsExactly(legacySystemMessage, typedMessage);
     }
 
     private static CreateOrUpdateConversationEntryDTO assistantEntryRequest(String idempotencyKey,
