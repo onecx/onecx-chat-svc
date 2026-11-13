@@ -159,7 +159,7 @@ public class ChatsRestController implements ChatsInternalApi {
     }
 
     @Override
-    public Response searchChatMessages(@Valid ChatMessageSearchCriteriaDTO chatMessageSearchCriteriaDTO) {
+    public Response searchChatMessages(ChatMessageSearchCriteriaDTO chatMessageSearchCriteriaDTO) {
         var criteria = mapper.map(chatMessageSearchCriteriaDTO);
         var chat = dao.findById(criteria.getChatId());
         var allMessages = chat == null ? List.<Message> of() : conversationEntryService.currentMessages(chat);
