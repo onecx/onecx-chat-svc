@@ -8,6 +8,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.Executable;
 import org.mockito.Mockito;
+import org.tkit.onecx.chat.domain.models.Chat;
 import org.tkit.quarkus.jpa.exceptions.DAOException;
 
 import io.quarkus.test.InjectMock;
@@ -29,6 +30,8 @@ class MessageDAOTest {
     @Test
     void methodExceptionTests() {
         methodExceptionTests(() -> dao.findChatMessagesByCriteria(null),
+                MessageDAO.ErrorKeys.ERROR_FIND_CHAT_MESSAGES_BY_CRITERIA);
+        methodExceptionTests(() -> dao.findMessagesByChat(new Chat()),
                 MessageDAO.ErrorKeys.ERROR_FIND_CHAT_MESSAGES_BY_CRITERIA);
     }
 

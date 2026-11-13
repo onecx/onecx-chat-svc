@@ -69,8 +69,8 @@ public class ConversationEntryService {
         }
 
         try {
-            var created = create(chat, idempotencyKey, actualType, actualStatus, newText, agentConfigVersion, userId,
-                    null);
+            var created = create(chat, idempotencyKey, actualType, actualStatus, newText,
+                    new EntryMetadata(agentConfigVersion, userId, null));
             if (isTerminal(created.getStatus())) {
                 updateLastMessageDate(chat, created);
             }
@@ -107,8 +107,8 @@ public class ConversationEntryService {
         }
         chatDAO.lock(chat.getId());
         var entry = create(chat, "typed-message:" + UUID.randomUUID(), ConversationEntry.EntryType.TEXT,
-                ConversationEntry.EntryStatus.COMPLETED, message.getText(), null, message.getUserId(),
-                message.getType());
+                ConversationEntry.EntryStatus.COMPLETED, message.getText(),
+                new EntryMetadata(null, message.getUserId(), message.getType()));
         updateLastMessageDate(chat, entry);
         return entry;
     }
@@ -139,7 +139,7 @@ public class ConversationEntryService {
             return entry;
         }
         var entry = create(chat, idempotencyKey, ConversationEntry.EntryType.TEXT,
-                ConversationEntry.EntryStatus.COMPLETED, text, null, userId, messageType);
+                ConversationEntry.EntryStatus.COMPLETED, text, new EntryMetadata(null, userId, messageType));
         updateLastMessageDate(chat, entry);
         return entry;
     }
@@ -160,9 +160,7 @@ public class ConversationEntryService {
             legacyMessagesById.put(legacy.getId(), legacy);
         }
         for (var entry : entries) {
-            if ((entry.getType() == ConversationEntry.EntryType.HUMAN
-                    || entry.getType() == ConversationEntry.EntryType.ASSISTANT)
-                    && (entry.getText() == null || entry.getText().isBlank())) {
+            if (isEmptyVoiceEntry(entry)) {
                 continue;
             }
             if (entry.getLegacyMessageId() != null
@@ -170,15 +168,15 @@ public class ConversationEntryService {
                 var legacy = legacyMessagesById.get(entry.getLegacyMessageId());
                 orderedMessages.add(new OrderedMessage(legacy, entry.getSequence()));
                 representedMessageIds.add(entry.getLegacyMessageId());
-                continue;
-            }
-            var message = chatMapper.mapEntryAsMessage(entry);
-            orderedMessages.add(new OrderedMessage(message, entry.getSequence()));
-            if (entry.getType() == ConversationEntry.EntryType.TEXT) {
-                representedMessageIds.add(entry.getId());
-            }
-            if (entry.getLegacyMessageId() != null) {
-                representedMessageIds.add(entry.getLegacyMessageId());
+            } else {
+                var message = chatMapper.mapEntryAsMessage(entry);
+                orderedMessages.add(new OrderedMessage(message, entry.getSequence()));
+                if (entry.getType() == ConversationEntry.EntryType.TEXT) {
+                    representedMessageIds.add(entry.getId());
+                }
+                if (entry.getLegacyMessageId() != null) {
+                    representedMessageIds.add(entry.getLegacyMessageId());
+                }
             }
         }
 
@@ -194,6 +192,12 @@ public class ConversationEntryService {
                 .thenComparing(message -> message.message().getId(),
                         Comparator.nullsLast(Comparator.naturalOrder())));
         return orderedMessages.stream().map(OrderedMessage::message).toList();
+    }
+
+    private boolean isEmptyVoiceEntry(ConversationEntry entry) {
+        return (entry.getType() == ConversationEntry.EntryType.HUMAN
+                || entry.getType() == ConversationEntry.EntryType.ASSISTANT)
+                && (entry.getText() == null || entry.getText().isBlank());
     }
 
     @Transactional
@@ -212,8 +216,7 @@ public class ConversationEntryService {
      * must never change afterwards.
      */
     private ConversationEntry create(Chat chat, String idempotencyKey, ConversationEntry.EntryType type,
-            ConversationEntry.EntryStatus status, String text, String agentConfigVersion, String userId,
-            Message.MessageType messageType) {
+            ConversationEntry.EntryStatus status, String text, EntryMetadata metadata) {
 
         ConversationEntry entry = new ConversationEntry();
         entry.setChat(chat);
@@ -221,9 +224,9 @@ public class ConversationEntryService {
         entry.setType(type);
         entry.setStatus(status);
         entry.setText(text);
-        entry.setAgentConfigVersion(agentConfigVersion);
-        entry.setUserId(userId);
-        entry.setMessageType(messageType);
+        entry.setAgentConfigVersion(metadata.agentConfigVersion());
+        entry.setUserId(metadata.userId());
+        entry.setMessageType(metadata.messageType());
 
         Long nextSequence = dao.findMaxSequenceByChat(chat) + 1;
 
@@ -274,8 +277,10 @@ public class ConversationEntryService {
         if (chat == null || (!systemMessage && (entry.getText() == null || entry.getText().isBlank()))) {
             return;
         }
-        var date = entry.getModificationDate() != null ? entry.getModificationDate()
-                : entry.getCreationDate() != null ? entry.getCreationDate() : java.time.LocalDateTime.now();
+        var date = entry.getModificationDate() != null ? entry.getModificationDate() : entry.getCreationDate();
+        if (date == null) {
+            date = java.time.LocalDateTime.now();
+        }
         chatDAO.updateLastMessageDate(chat.getId(), date);
         chat.setLastMessageDate(date);
     }
@@ -283,6 +288,9 @@ public class ConversationEntryService {
     private boolean isTerminal(ConversationEntry.EntryStatus status) {
         return status == ConversationEntry.EntryStatus.COMPLETED
                 || status == ConversationEntry.EntryStatus.INTERRUPTED;
+    }
+
+    private record EntryMetadata(String agentConfigVersion, String userId, Message.MessageType messageType) {
     }
 
     /**

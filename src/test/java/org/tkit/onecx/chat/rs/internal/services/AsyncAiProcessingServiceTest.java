@@ -99,6 +99,36 @@ class AsyncAiProcessingServiceTest {
     }
 
     @Test
+    void synchronousDispatchSkipsRequestsWithAnExistingResponse() {
+        var chat = new Chat();
+        var message = new Message();
+        message.setId("request");
+        when(conversationEntryService.hasAiResponse(chat, "request")).thenReturn(true);
+
+        service.forwardToAiAndStore(chat, message, new RequestContext(), null, null);
+
+        verifyNoInteractions(dispatchClient, notificationClient, mapper);
+    }
+
+    @Test
+    void humanAiResponsePreservesItsRoleAndUser() {
+        var chat = new Chat();
+        var response = new ChatMessage();
+        response.setConversationId("request");
+        var message = new Message();
+        message.setType(Message.MessageType.HUMAN);
+        message.setText("Follow-up");
+        message.setUserId("user");
+        when(chatDao.findById("chat")).thenReturn(chat);
+        when(mapper.mapAiSvcMessage(response)).thenReturn(message);
+
+        service.storeAiResponse("chat", response);
+
+        verify(conversationEntryService).createAiResponse(chat, "request", Message.MessageType.HUMAN, "Follow-up", "user");
+        verify(messageDao, never()).create(any(Message.class));
+    }
+
+    @Test
     void processShouldNotifyOnlyNonSenderParticipants() {
         var chatId = "chat-id";
         var messageId = "message-id";

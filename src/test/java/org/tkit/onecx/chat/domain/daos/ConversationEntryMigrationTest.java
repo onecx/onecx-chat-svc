@@ -183,25 +183,24 @@ class ConversationEntryMigrationTest {
     private void runMigration(String schema) throws Exception {
         try (Connection connection = dataSource.getConnection()) {
             var originalSchema = connection.getSchema();
-            Liquibase liquibase = null;
             try {
                 connection.setSchema(schema);
                 var database = DatabaseFactory.getInstance()
                         .findCorrectDatabaseImplementation(new JdbcConnection(connection));
                 database.setDefaultSchemaName(schema);
                 database.setLiquibaseSchemaName(schema);
-                liquibase = new Liquibase("db/v1/2026-11-12-migrate-typed-messages-to-conversation-entries.xml",
-                        new ClassLoaderResourceAccessor(), database);
-                liquibase.update(new Contexts(), new LabelExpression());
-            } finally {
-                try {
-                    if (!connection.isClosed()) {
+                try (var liquibase = new Liquibase("db/v1/2026-11-12-migrate-typed-messages-to-conversation-entries.xml",
+                        new ClassLoaderResourceAccessor(), database)) {
+                    try {
+                        liquibase.update(new Contexts(), new LabelExpression());
+                    } finally {
+                        // Liquibase closes the pooled connection, so restore its schema first.
                         connection.setSchema(originalSchema);
                     }
-                } finally {
-                    if (liquibase != null) {
-                        liquibase.close();
-                    }
+                }
+            } finally {
+                if (!connection.isClosed()) {
+                    connection.setSchema(originalSchema);
                 }
             }
         }

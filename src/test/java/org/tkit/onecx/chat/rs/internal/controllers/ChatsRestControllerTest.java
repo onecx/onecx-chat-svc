@@ -1122,6 +1122,29 @@ class ChatsRestControllerTest extends AbstractTest {
     }
 
     @Test
+    void searchChatMessagesUsesDefaultPaginationWhenExplicitlyNull() {
+        var criteria = new ChatMessageSearchCriteriaDTO();
+        criteria.setChatId("chat-22-222");
+        criteria.setPageNumber(null);
+        criteria.setPageSize(null);
+
+        var data = given()
+                .auth().oauth2(getKeycloakClientToken("testClient"))
+                .contentType(APPLICATION_JSON)
+                .body(criteria)
+                .post("/messages/search")
+                .then()
+                .statusCode(OK.getStatusCode())
+                .extract()
+                .as(ChatMessageResponseDTO.class);
+
+        assertThat(data.getMessages().getTotalElements()).isEqualTo(4);
+        assertThat(data.getMessages().getStream()).hasSize(4);
+        assertThat(data.getMessages().getNumber()).isZero();
+        assertThat(data.getMessages().getSize()).isEqualTo(20);
+    }
+
+    @Test
     void searchChatMessagesWithOverMaximumPageSizeTest() {
         var criteria = new ChatMessageSearchCriteriaDTO();
 

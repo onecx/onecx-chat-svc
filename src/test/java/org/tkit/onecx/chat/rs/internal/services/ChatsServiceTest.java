@@ -89,4 +89,24 @@ class ChatsServiceTest {
                         .fire(new AsyncAiProcessingRequest("chat-id", "msg-id", requestContext, apmPrincipalToken,
                                 userAuthorization)));
     }
+
+    @Test
+    void nullRoleMessageKeepsLegacyPersistence() {
+        var chat = new Chat();
+        chat.setType(Chat.ChatType.HUMAN_DIRECT_CHAT);
+        var dto = new CreateMessageDTO();
+        dto.setSkipAIProcessing(true);
+        var message = new Message();
+        message.setText("Action");
+        when(mapper.createMessage(dto)).thenReturn(message);
+        when(msgDao.create(message)).thenReturn(message);
+
+        var result = service.createChatMessage(chat, dto, null, null);
+
+        Assertions.assertSame(message, result);
+        Assertions.assertSame(chat, result.getChat());
+        Assertions.assertEquals("Action", result.getText());
+        verify(msgDao).create(message);
+        org.mockito.Mockito.verifyNoInteractions(conversationEntryService, asyncAiProcessingRequestEvent);
+    }
 }

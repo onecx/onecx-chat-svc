@@ -10,11 +10,18 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 import jakarta.inject.Inject;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.ArgumentCaptor;
 import org.tkit.onecx.chat.domain.daos.ChatDAO;
 import org.tkit.onecx.chat.domain.daos.ConversationEntryDAO;
@@ -584,6 +591,222 @@ class ConversationEntryServiceTest {
         when(msgDao.findMessagesByChat(chat)).thenReturn(java.util.List.of(legacySystemMessage));
 
         assertThat(service.currentMessages(chat)).containsExactly(legacySystemMessage, typedMessage);
+    }
+
+    @Test
+    void typedMessageRequiresRole() {
+        assertThrows(IllegalArgumentException.class, () -> service.createTypedMessage(new Chat(), new Message()));
+        verify(dao, never()).create(any(ConversationEntry.class));
+    }
+
+    @ParameterizedTest
+    @EnumSource(Message.MessageType.class)
+    void aiResponseAcceptsOnlyHumanAndAssistantRoles(Message.MessageType role) {
+        var chat = new Chat();
+        if (role == Message.MessageType.SYSTEM) {
+            assertThrows(IllegalArgumentException.class,
+                    () -> service.createAiResponse(chat, "request", role, "Reply", "user"));
+            verify(dao, never()).create(any(ConversationEntry.class));
+        } else {
+            var entry = service.createAiResponse(chat, "request", role, "Reply", "user");
+            assertThat(entry.getMessageType()).isEqualTo(role);
+            assertThat(entry.getUserId()).isEqualTo("user");
+            assertThat(entry.getText()).isEqualTo("Reply");
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "HUMAN,ASSISTANT,COMPLETED,Answer,user",
+            "TEXT,HUMAN,COMPLETED,Answer,user",
+            "TEXT,ASSISTANT,IN_PROGRESS,Answer,user",
+            "TEXT,ASSISTANT,COMPLETED,Changed,user",
+            "TEXT,ASSISTANT,COMPLETED,Answer,other"
+    })
+    void aiResponseRejectsConflictingRetries(ConversationEntry.EntryType type, Message.MessageType role,
+            ConversationEntry.EntryStatus status, String text, String user) {
+        var chat = new Chat();
+        var existing = new ConversationEntry();
+        existing.setType(type);
+        existing.setMessageType(role);
+        existing.setStatus(status);
+        existing.setText(text);
+        existing.setUserId(user);
+        when(dao.findByChatAndIdempotencyKey(chat, "ai-response:request")).thenReturn(Optional.of(existing));
+
+        assertThrows(IdempotencyConflictException.class,
+                () -> service.createAiResponse(chat, "request", Message.MessageType.ASSISTANT, "Answer", "user"));
+        verify(dao, never()).create(any(ConversationEntry.class));
+    }
+
+    @ParameterizedTest
+    @MethodSource("voiceMessages")
+    void currentMessagesHidesOnlyEmptyVoiceEntries(ConversationEntry.EntryType type, String text, boolean visible) {
+        var chat = new Chat();
+        var entry = new ConversationEntry();
+        entry.setType(type);
+        entry.setText(text);
+        var message = new Message();
+        message.setText(text);
+        when(dao.findReplayEntries(chat)).thenReturn(List.of(entry));
+        when(chatMapper.mapEntryAsMessage(entry)).thenReturn(message);
+
+        assertThat(service.currentMessages(chat)).isEqualTo(visible ? List.of(message) : List.of());
+    }
+
+    static Stream<Arguments> voiceMessages() {
+        return Stream.of(
+                Arguments.of(ConversationEntry.EntryType.HUMAN, null, false),
+                Arguments.of(ConversationEntry.EntryType.HUMAN, " ", false),
+                Arguments.of(ConversationEntry.EntryType.HUMAN, "Question", true),
+                Arguments.of(ConversationEntry.EntryType.ASSISTANT, null, false),
+                Arguments.of(ConversationEntry.EntryType.ASSISTANT, " ", false),
+                Arguments.of(ConversationEntry.EntryType.ASSISTANT, "Answer", true),
+                Arguments.of(ConversationEntry.EntryType.TEXT, "", true));
+    }
+
+    @Test
+    void currentMessagesMapsEntriesWhoseLegacyRowIsMissing() {
+        var chat = new Chat();
+        var entry = new ConversationEntry();
+        entry.setType(ConversationEntry.EntryType.TEXT);
+        entry.setId("entry");
+        entry.setLegacyMessageId("missing");
+        var message = new Message();
+        message.setId("entry");
+        when(dao.findReplayEntries(chat)).thenReturn(List.of(entry));
+        when(chatMapper.mapEntryAsMessage(entry)).thenReturn(message);
+
+        assertThat(service.currentMessages(chat)).containsExactly(message);
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "missing,false",
+            "no-chat,false",
+            "other-chat,false",
+            "in-progress,false",
+            "completed,true",
+            "interrupted,true"
+    })
+    void findMessageByIdOnlyReturnsTerminalEntriesInTheRequestedChat(String scenario, boolean visible) {
+        var chat = new Chat();
+        chat.setId("chat");
+        var entry = new ConversationEntry();
+        entry.setChat(chat);
+        entry.setStatus(ConversationEntry.EntryStatus.COMPLETED);
+        switch (scenario) {
+            case "missing" -> entry = null;
+            case "no-chat" -> entry.setChat(null);
+            case "other-chat" -> {
+                var other = new Chat();
+                other.setId("other");
+                entry.setChat(other);
+            }
+            case "in-progress" -> entry.setStatus(ConversationEntry.EntryStatus.IN_PROGRESS);
+            case "interrupted" -> entry.setStatus(ConversationEntry.EntryStatus.INTERRUPTED);
+            default -> {
+                // The completed entry belongs to the requested chat.
+            }
+        }
+        var message = new Message();
+        message.setId("message");
+        when(dao.findById("entry")).thenReturn(entry);
+        if (visible) {
+            when(chatMapper.mapEntryAsMessage(entry)).thenReturn(message);
+        }
+
+        assertThat(service.findMessageById(chat, "entry")).isSameAs(visible ? message : null);
+    }
+
+    @ParameterizedTest
+    @CsvSource(value = {
+            "NULL,user,true,true",
+            "user,NULL,true,false",
+            "user,user,false,false",
+            "NULL,user,false,true",
+            "user,other,false,true"
+    }, nullValues = "NULL")
+    void entryUserMetadataIsImmutableButCanBeInitiallyAssigned(String storedUser, String requestedUser,
+            boolean growingText, boolean changes) {
+        var chat = new Chat();
+        var dto = assistantEntryRequest("entry", null);
+        dto.setUserId(requestedUser);
+        var entry = assistantEntry("entry", null);
+        entry.setUserId(storedUser);
+        if (growingText) {
+            entry.setText("Hel");
+        }
+        mockAssistantMappings();
+        when(dao.findByChatAndIdempotencyKey(chat, "entry")).thenReturn(Optional.of(entry));
+        when(dao.update(entry)).thenReturn(entry);
+
+        if (storedUser != null && requestedUser != null && changes) {
+            assertThrows(IdempotencyConflictException.class, () -> service.createOrUpdate(chat, dto));
+        } else {
+            var result = service.createOrUpdate(chat, dto);
+            assertThat(result.getUserId()).isEqualTo(storedUser == null ? requestedUser : storedUser);
+            assertThat(result.getText()).isEqualTo("Hello");
+        }
+    }
+
+    @Test
+    void entryCanAcquireUserAndAgentMetadataWithoutChangingText() {
+        var chat = new Chat();
+        var dto = assistantEntryRequest("entry", "config");
+        dto.setUserId("user");
+        var entry = assistantEntry("entry", null);
+        mockAssistantMappings();
+        when(dao.findByChatAndIdempotencyKey(chat, "entry")).thenReturn(Optional.of(entry));
+        when(dao.update(entry)).thenReturn(entry);
+
+        var result = service.createOrUpdate(chat, dto);
+
+        assertThat(result.getUserId()).isEqualTo("user");
+        assertThat(result.getAgentConfigVersion()).isEqualTo("config");
+        assertThat(result.getText()).isEqualTo("Hello");
+    }
+
+    @ParameterizedTest
+    @CsvSource({ "SYSTEM,false", "HUMAN,true" })
+    void systemEntriesAdvanceLastMessageDateEvenWithoutText(ConversationEntry.EntryType type, boolean typed) {
+        var chat = new Chat();
+        chat.setId("chat");
+        var created = new ConversationEntry();
+        created.setType(typed ? ConversationEntry.EntryType.TEXT : type);
+        created.setStatus(ConversationEntry.EntryStatus.COMPLETED);
+        created.setMessageType(Message.MessageType.SYSTEM);
+        created.setCreationDate(LocalDateTime.parse("2026-11-12T10:00:00"));
+        when(dao.create(any(ConversationEntry.class))).thenReturn(created);
+        if (typed) {
+            var message = new Message();
+            message.setType(Message.MessageType.SYSTEM);
+            service.createTypedMessage(chat, message);
+        } else {
+            var dto = assistantEntryRequest("entry", null);
+            dto.setStatus(EntryStatusDTO.COMPLETED);
+            when(chatMapper.mapConversationStatus(EntryStatusDTO.COMPLETED))
+                    .thenReturn(ConversationEntry.EntryStatus.COMPLETED);
+            service.createOrUpdate(chat, dto);
+        }
+
+        assertThat(chat.getLastMessageDate()).isEqualTo(LocalDateTime.parse("2026-11-12T10:00:00"));
+    }
+
+    @Test
+    void lastMessageDatePrefersModificationDateToCreationDate() {
+        var chat = new Chat();
+        var created = new ConversationEntry();
+        created.setType(ConversationEntry.EntryType.TEXT);
+        created.setMessageType(Message.MessageType.ASSISTANT);
+        created.setText("Answer");
+        created.setCreationDate(LocalDateTime.parse("2026-11-12T10:00:00"));
+        created.setModificationDate(LocalDateTime.parse("2026-11-12T11:00:00"));
+        when(dao.create(any(ConversationEntry.class))).thenReturn(created);
+
+        service.createAssistantResponse(chat, "request", "Answer");
+
+        assertThat(chat.getLastMessageDate()).isEqualTo(LocalDateTime.parse("2026-11-12T11:00:00"));
     }
 
     private static CreateOrUpdateConversationEntryDTO assistantEntryRequest(String idempotencyKey,
