@@ -192,7 +192,38 @@ public interface ChatMapper {
     ChatConversationEntryResponseDTO mapEntryReponse(ConversationEntry entry);
 
     @Mapping(target = "sequenceNumber", source = "sequence")
+    @Mapping(target = "type", expression = "java(mapEntryConversationType(entry))")
     ChatConversationEntryDTO mapEntryDTO(ConversationEntry entry);
 
     List<ChatConversationEntryDTO> mapEntries(List<ConversationEntry> entries);
+
+    @Mapping(target = "type", expression = "java(mapEntryMessageType(entry))")
+    Message mapEntryAsMessage(ConversationEntry entry);
+
+    default ConversationTypeDTO mapEntryConversationType(ConversationEntry entry) {
+        var type = entry.getType() == ConversationEntry.EntryType.TEXT
+                ? entry.getMessageType()
+                : MessageType.valueOf(entry.getType().name());
+        return ConversationTypeDTO.valueOf(type.name());
+    }
+
+    default MessageType mapEntryMessageType(ConversationEntry entry) {
+        return entry.getType() == ConversationEntry.EntryType.TEXT
+                ? entry.getMessageType()
+                : MessageType.valueOf(entry.getType().name());
+    }
+
+    default ChatMessageResponseDTO mapResponse(List<Participant> participants, List<Message> messages,
+            int pageNumber, int pageSize, long totalElements) {
+        var result = new ChatMessageResponseDTO();
+        result.setParticipants(mapParticipantList(participants));
+        var page = new MessagePageResultDTO();
+        page.setStream(mapMessageList(messages));
+        page.setNumber(pageNumber);
+        page.setSize(pageSize);
+        page.setTotalElements(totalElements);
+        page.setTotalPages(pageSize <= 0 ? 0L : (totalElements + pageSize - 1) / pageSize);
+        result.setMessages(page);
+        return result;
+    }
 }

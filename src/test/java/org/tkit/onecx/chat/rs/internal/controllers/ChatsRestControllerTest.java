@@ -64,6 +64,18 @@ class ChatsRestControllerTest extends AbstractTest {
     @Test
     void deleteChatTest() {
 
+        var entry = conversationEntry();
+        entry.setStatus(EntryStatusDTO.COMPLETED);
+        entry.setText("delete with chat");
+        entry.setIdempotencyKey("delete-chat-entry");
+        given()
+                .auth().oauth2(getKeycloakClientToken("testClient"))
+                .pathParam("chatId", "chat-DELETE_1")
+                .contentType(APPLICATION_JSON)
+                .body(entry)
+                .put("{chatId}/conversation-entries")
+                .then().statusCode(NO_CONTENT.getStatusCode());
+
         // delete chat
         given()
                 .auth().oauth2(getKeycloakClientToken("testClient"))
@@ -286,7 +298,7 @@ class ChatsRestControllerTest extends AbstractTest {
                 .extract().as(List.class);
 
         assertThat(response).isNotNull();
-        assertThat(response).isNotNull().isNotEmpty().hasSize(3);
+        assertThat(response).isNotNull().isNotEmpty().hasSize(4);
 
     }
 
@@ -413,6 +425,25 @@ class ChatsRestControllerTest extends AbstractTest {
         assertThat(response).isNotNull();
         assertThat(response).isNotNull().isNotEmpty().hasSize(1);
         assertThat(response.get(0).getType()).isEqualTo(MessageTypeDTO.HUMAN);
+        assertThat(response.get(0).getText()).isEqualTo("This is a human question");
+        assertThat(response.get(0).getUserId()).isEqualTo("humanId");
+
+        var entries = given()
+                .auth().oauth2(getKeycloakClientToken("testClient"))
+                .contentType(APPLICATION_JSON)
+                .pathParam("chatId", chat.getId())
+                .get("{chatId}/conversation-entries")
+                .then()
+                .statusCode(OK.getStatusCode())
+                .extract().as(new TypeRef<List<ChatConversationEntryDTO>>() {
+                });
+
+        assertThat(entries).singleElement().satisfies(entry -> {
+            assertThat(entry.getType()).isEqualTo(ConversationTypeDTO.HUMAN);
+            assertThat(entry.getStatus()).isEqualTo(EntryStatusDTO.COMPLETED);
+            assertThat(entry.getSequenceNumber()).isEqualTo(1);
+            assertThat(entry.getUserId()).isEqualTo("humanId");
+        });
 
     }
 
@@ -1068,8 +1099,8 @@ class ChatsRestControllerTest extends AbstractTest {
                 .extract()
                 .as(ChatMessageResponseDTO.class);
 
-        assertThat(data.getMessages().getTotalElements()).isEqualTo(3);
-        assertThat(data.getMessages().getStream()).hasSize(3);
+        assertThat(data.getMessages().getTotalElements()).isEqualTo(4);
+        assertThat(data.getMessages().getStream()).hasSize(4);
         assertThat(data.getParticipants()).hasSize(1);
 
         // CASE 3 — in criteria pageSize = 2
@@ -1084,10 +1115,33 @@ class ChatsRestControllerTest extends AbstractTest {
                 .extract()
                 .as(ChatMessageResponseDTO.class);
 
-        assertThat(data.getMessages().getTotalElements()).isEqualTo(3);
+        assertThat(data.getMessages().getTotalElements()).isEqualTo(4);
         assertThat(data.getMessages().getStream()).hasSize(2);
         assertThat(data.getParticipants()).hasSize(1);
 
+    }
+
+    @Test
+    void searchChatMessagesUsesDefaultPaginationWhenExplicitlyNull() {
+        var criteria = new ChatMessageSearchCriteriaDTO();
+        criteria.setChatId("chat-22-222");
+        criteria.setPageNumber(null);
+        criteria.setPageSize(null);
+
+        var data = given()
+                .auth().oauth2(getKeycloakClientToken("testClient"))
+                .contentType(APPLICATION_JSON)
+                .body(criteria)
+                .post("/messages/search")
+                .then()
+                .statusCode(OK.getStatusCode())
+                .extract()
+                .as(ChatMessageResponseDTO.class);
+
+        assertThat(data.getMessages().getTotalElements()).isEqualTo(4);
+        assertThat(data.getMessages().getStream()).hasSize(4);
+        assertThat(data.getMessages().getNumber()).isZero();
+        assertThat(data.getMessages().getSize()).isEqualTo(20);
     }
 
     @Test
@@ -2009,14 +2063,14 @@ class ChatsRestControllerTest extends AbstractTest {
                 .extract()
                 .as(ChatMessageResponseDTO.class);
 
-        // findChatMessagesByCriteria returns the voice turn ordered with the typed message
+        // the search API returns the voice turn ordered with the typed message
         assertThat(data.getMessages().getTotalElements()).isEqualTo(2);
         assertThat(data.getMessages().getStream()).extracting(MessageDTO::getText)
                 .containsExactlyInAnyOrder("typed question", "voice turn text");
     }
 
     @Test
-    void createdVoiceTurnMessagesAreScopedToTheirTenantTest() {
+    void createdVoiceTurnEntriesAreScopedToTheirTenantTest() {
 
         // create an AI chat as tenant-100 (org1)
         var chatDto = new CreateChatDTO();
@@ -2033,7 +2087,7 @@ class ChatsRestControllerTest extends AbstractTest {
                 .extract()
                 .body().as(ChatDTO.class);
 
-        // a COMPLETED entry creates a voice-turn message scoped to tenant-100
+        // a COMPLETED entry is exposed as a message only to tenant-100
         var entryDto = new CreateOrUpdateConversationEntryDTO();
         entryDto.setType(ConversationTypeDTO.HUMAN);
         entryDto.setStatus(EntryStatusDTO.COMPLETED);
@@ -2064,7 +2118,7 @@ class ChatsRestControllerTest extends AbstractTest {
         assertThat(asTenant100).hasSize(1);
         assertThat(asTenant100.get(0).getText()).isEqualTo("voice turn text");
 
-        // ...and the created message is isolated from another tenant
+        // ...and the entry is isolated from another tenant
         var criteria = new ChatMessageSearchCriteriaDTO();
         criteria.setChatId(chat.getId());
         var asOtherTenant = given()

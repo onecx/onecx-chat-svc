@@ -51,6 +51,9 @@ public class AsyncAiProcessingService {
     ChatMapper mapper;
 
     @Inject
+    ConversationEntryService conversationEntryService;
+
+    @Inject
     @RestClient
     DispatchApi dispatchClient;
 
@@ -81,11 +84,18 @@ public class AsyncAiProcessingService {
     public void process(String chatId, String messageId, RequestContext context, String apmPrincipalToken,
             String userAuthorization) {
         var chat = chatDao.findById(chatId);
-        var message = messageDao.findById(messageId);
+        var message = chat == null ? null : conversationEntryService.findMessageById(chat, messageId);
+        if (message == null) {
+            message = messageDao.findById(messageId);
+        }
 
         if (chat == null || message == null) {
             log.warn("Skipping async AI processing because chat or message was not found. chatId={}, messageId={}",
                     chatId, messageId);
+            return;
+        }
+
+        if (conversationEntryService.hasAiResponse(chat, messageId)) {
             return;
         }
 
@@ -95,7 +105,11 @@ public class AsyncAiProcessingService {
 
     public void forwardToAiAndStore(Chat chat, Message message, RequestContext context, String apmPrincipalToken,
             String userAuthorization) {
+        if (conversationEntryService.hasAiResponse(chat, message.getId())) {
+            return;
+        }
         Conversation conversation = mapper.mapChat2Conversation(chat);
+        conversation.setHistory(conversationEntryService.currentMessages(chat).stream().map(mapper::mapMessage).toList());
         ChatMessage chatMessage = mapper.mapMessage(message);
 
         ChatRequest chatRequest = new ChatRequest();
@@ -107,11 +121,15 @@ public class AsyncAiProcessingService {
                 var _ = AiServiceUserAuthorizationContext.withHeader(userAuthorization);
                 Response response = dispatchClient.chat(chatRequest)) {
             var chatResponse = response.readEntity(ChatMessage.class);
-            storeAiResponse(chat.getId(), chatResponse);
+            storeAiResponse(chat.getId(), message.getId(), chatResponse);
         }
     }
 
     public void storeAiResponse(String chatId, ChatMessage chatResponse) {
+        storeAiResponse(chatId, chatResponse.getConversationId(), chatResponse);
+    }
+
+    private void storeAiResponse(String chatId, String requestMessageId, ChatMessage chatResponse) {
         var managedChat = chatDao.findById(chatId);
         if (managedChat == null) {
             log.warn("Skipping AI response persistence because chat was not found. chatId={}", chatId);
@@ -119,8 +137,14 @@ public class AsyncAiProcessingService {
         }
 
         var responseMessage = mapper.mapAiSvcMessage(chatResponse);
-        responseMessage.setChat(managedChat);
-        messageDao.create(responseMessage);
+        if (responseMessage.getType() != Message.MessageType.HUMAN
+                && responseMessage.getType() != Message.MessageType.ASSISTANT) {
+            responseMessage.setChat(managedChat);
+            messageDao.create(responseMessage);
+            return;
+        }
+        conversationEntryService.createAiResponse(managedChat, requestMessageId, responseMessage.getType(),
+                responseMessage.getText(), responseMessage.getUserId());
     }
 
     private void notifyAsyncAiResponseReady(Chat chat, Message message, String apmPrincipalToken) {

@@ -87,11 +87,24 @@ public class ConversationEntryDAO extends AbstractDAO<ConversationEntry> {
         }
     }
 
+    @Transactional
+    public void deleteByChat(Chat chat) {
+        try {
+            this.getEntityManager()
+                    .createQuery("delete from ConversationEntry e where e.chat = :chat")
+                    .setParameter("chat", chat)
+                    .executeUpdate();
+        } catch (Exception ex) {
+            throw new DAOException(ErrorKeys.ERROR_DELETE_CONVERSATION_ENTRIES_BY_CHAT, ex);
+        }
+    }
+
     public enum ErrorKeys {
 
         ERROR_FIND_CONVERSATION_ENTRY_BY_IDEMPOTENCY_KEY,
         ERROR_FIND_CONVERSATION_ENTRY_MAX_SEQUENCE,
-        ERROR_FIND_CONVERSATION_ENTRY_REPLAY_ENTRIES;
+        ERROR_FIND_CONVERSATION_ENTRY_REPLAY_ENTRIES,
+        ERROR_DELETE_CONVERSATION_ENTRIES_BY_CHAT;
 
     }
 }

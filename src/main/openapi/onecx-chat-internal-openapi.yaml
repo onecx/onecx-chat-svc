@@ -768,6 +768,8 @@ components:
         agentConfigVersion:
           type: string
           maxLength: 255
+        userId:
+          type: string
         chat:
           $ref: '#/components/schemas/Chat'
         status:
@@ -791,6 +793,8 @@ components:
           type: integer
         agentConfigVersion:
           type: string
+        userId:
+          type: string
     ChatConversationEntry:
       type: object
       properties:
@@ -809,8 +813,11 @@ components:
           type: string
         status:
           $ref: '#/components/schemas/EntryStatus'
+        userId:
+          type: string
     ConversationType:
       type: string
       enum:
         - HUMAN
         - ASSISTANT
+        - SYSTEM

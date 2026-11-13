@@ -12,6 +12,7 @@ import jakarta.persistence.criteria.Predicate;
 import jakarta.transaction.Transactional;
 
 import org.tkit.onecx.chat.domain.criteria.ChatMessageSearchCriteria;
+import org.tkit.onecx.chat.domain.models.Chat;
 import org.tkit.onecx.chat.domain.models.Message;
 import org.tkit.onecx.chat.domain.models.Message_;
 import org.tkit.quarkus.jpa.daos.AbstractDAO;
@@ -56,6 +57,20 @@ public class MessageDAO extends AbstractDAO<Message> {
 
         } catch (Exception ex) {
             throw new DAOException(MessageDAO.ErrorKeys.ERROR_FIND_CHAT_MESSAGES_BY_CRITERIA, ex);
+        }
+    }
+
+    public List<Message> findMessagesByChat(Chat chat) {
+        try {
+            var cb = this.getEntityManager().getCriteriaBuilder();
+            var cq = cb.createQuery(Message.class);
+            var root = cq.from(Message.class);
+            cq.where(cb.equal(root.get(Message_.CHAT), chat));
+            cq.orderBy(cb.asc(root.get(AbstractTraceableEntity_.CREATION_DATE)),
+                    cb.asc(root.get(TraceableEntity_.ID)));
+            return this.getEntityManager().createQuery(cq).getResultList();
+        } catch (Exception ex) {
+            throw new DAOException(ErrorKeys.ERROR_FIND_CHAT_MESSAGES_BY_CRITERIA, ex);
         }
     }
 

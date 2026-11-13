@@ -1,8 +1,14 @@
 package org.tkit.onecx.chat.rs.internal.services;
 
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -55,20 +61,26 @@ public class ConversationEntryService {
         ConversationEntry.EntryStatus actualStatus = chatMapper.mapConversationStatus(entry.getStatus());
         final String newText = entry.getText();
         final String agentConfigVersion = entry.getAgentConfigVersion();
+        final String userId = entry.getUserId();
         Optional<ConversationEntry> existing = dao.findByChatAndIdempotencyKey(chat, idempotencyKey);
 
         if (existing.isPresent()) {
-            return update(existing.get(), actualType, actualStatus, newText, agentConfigVersion);
+            return update(existing.get(), actualType, actualStatus, newText, agentConfigVersion, userId);
         }
 
         try {
-            return create(chat, idempotencyKey, actualType, actualStatus, newText, agentConfigVersion);
+            var created = create(chat, idempotencyKey, actualType, actualStatus, newText,
+                    new EntryMetadata(agentConfigVersion, userId, null));
+            if (isTerminal(created.getStatus())) {
+                updateLastMessageDate(chat, created);
+            }
+            return created;
         } catch (ConstraintException ex) {
             // Handle potential race condition where another request created
             log.debug("Persistence conflict creating conversation entry for chat {} idempotencyKey {}, retrying",
                     chat.getId(), entry.getIdempotencyKey(), ex);
             return dao.findByChatAndIdempotencyKey(chat, idempotencyKey)
-                    .map(e -> update(e, actualType, actualStatus, newText, agentConfigVersion))
+                    .map(e -> update(e, actualType, actualStatus, newText, agentConfigVersion, userId))
                     .orElseThrow(() -> ex);
         }
     }
@@ -83,13 +95,128 @@ public class ConversationEntryService {
         return dao.findReplayEntries(chat);
     }
 
+    @Transactional
+    public void deleteByChat(Chat chat) {
+        dao.deleteByChat(chat);
+    }
+
+    @Transactional
+    public ConversationEntry createTypedMessage(Chat chat, Message message) {
+        if (message.getType() == null) {
+            throw new IllegalArgumentException("A message type is required for conversation entries.");
+        }
+        chatDAO.lock(chat.getId());
+        var entry = create(chat, "typed-message:" + UUID.randomUUID(), ConversationEntry.EntryType.TEXT,
+                ConversationEntry.EntryStatus.COMPLETED, message.getText(),
+                new EntryMetadata(null, message.getUserId(), message.getType()));
+        updateLastMessageDate(chat, entry);
+        return entry;
+    }
+
+    @Transactional
+    public ConversationEntry createAssistantResponse(Chat chat, String requestMessageId, String text) {
+        return createAiResponse(chat, requestMessageId, Message.MessageType.ASSISTANT, text, null);
+    }
+
+    @Transactional
+    public ConversationEntry createAiResponse(Chat chat, String requestMessageId, Message.MessageType messageType,
+            String text, String userId) {
+        if (messageType != Message.MessageType.HUMAN && messageType != Message.MessageType.ASSISTANT) {
+            throw new IllegalArgumentException("AI response entries must be HUMAN or ASSISTANT.");
+        }
+        chatDAO.lock(chat.getId());
+        final String idempotencyKey = "ai-response:" + requestMessageId;
+        var existing = dao.findByChatAndIdempotencyKey(chat, idempotencyKey);
+        if (existing.isPresent()) {
+            var entry = existing.get();
+            if (entry.getType() != ConversationEntry.EntryType.TEXT
+                    || entry.getMessageType() != messageType
+                    || entry.getStatus() != ConversationEntry.EntryStatus.COMPLETED
+                    || !Objects.equals(entry.getText(), text)
+                    || !Objects.equals(entry.getUserId(), userId)) {
+                throw new IdempotencyConflictException("AI response retry does not match the stored response.");
+            }
+            return entry;
+        }
+        var entry = create(chat, idempotencyKey, ConversationEntry.EntryType.TEXT,
+                ConversationEntry.EntryStatus.COMPLETED, text, new EntryMetadata(null, userId, messageType));
+        updateLastMessageDate(chat, entry);
+        return entry;
+    }
+
+    @Transactional
+    public boolean hasAiResponse(Chat chat, String requestMessageId) {
+        return dao.findByChatAndIdempotencyKey(chat, "ai-response:" + requestMessageId).isPresent();
+    }
+
+    @Transactional
+    public List<Message> currentMessages(Chat chat) {
+        var entries = dao.findReplayEntries(chat);
+        var legacyMessages = messageDAO.findMessagesByChat(chat);
+        var orderedMessages = new ArrayList<OrderedMessage>();
+        Set<String> representedMessageIds = new HashSet<>();
+        var legacyMessagesById = new HashMap<String, Message>();
+        for (var legacy : legacyMessages) {
+            legacyMessagesById.put(legacy.getId(), legacy);
+        }
+        for (var entry : entries) {
+            if (isEmptyVoiceEntry(entry)) {
+                continue;
+            }
+            if (entry.getLegacyMessageId() != null
+                    && legacyMessagesById.containsKey(entry.getLegacyMessageId())) {
+                var legacy = legacyMessagesById.get(entry.getLegacyMessageId());
+                orderedMessages.add(new OrderedMessage(legacy, entry.getSequence()));
+                representedMessageIds.add(entry.getLegacyMessageId());
+            } else {
+                var message = chatMapper.mapEntryAsMessage(entry);
+                orderedMessages.add(new OrderedMessage(message, entry.getSequence()));
+                if (entry.getType() == ConversationEntry.EntryType.TEXT) {
+                    representedMessageIds.add(entry.getId());
+                }
+                if (entry.getLegacyMessageId() != null) {
+                    representedMessageIds.add(entry.getLegacyMessageId());
+                }
+            }
+        }
+
+        for (var legacy : legacyMessages) {
+            if (!representedMessageIds.contains(legacy.getId())) {
+                orderedMessages.add(new OrderedMessage(legacy, null));
+            }
+        }
+        orderedMessages.sort(Comparator
+                .comparing((OrderedMessage message) -> message.message().getCreationDate(),
+                        Comparator.nullsLast(Comparator.naturalOrder()))
+                .thenComparing(OrderedMessage::sequence, Comparator.nullsLast(Comparator.naturalOrder()))
+                .thenComparing(message -> message.message().getId(),
+                        Comparator.nullsLast(Comparator.naturalOrder())));
+        return orderedMessages.stream().map(OrderedMessage::message).toList();
+    }
+
+    private boolean isEmptyVoiceEntry(ConversationEntry entry) {
+        return (entry.getType() == ConversationEntry.EntryType.HUMAN
+                || entry.getType() == ConversationEntry.EntryType.ASSISTANT)
+                && (entry.getText() == null || entry.getText().isBlank());
+    }
+
+    @Transactional
+    public Message findMessageById(Chat chat, String id) {
+        var entry = dao.findById(id);
+        if (entry == null || entry.getChat() == null || !Objects.equals(entry.getChat().getId(), chat.getId())
+                || !isTerminal(entry.getStatus())) {
+            return null;
+        }
+        return chatMapper.mapEntryAsMessage(entry);
+    }
+
     /**
      * Creates a brand new entry.
      * The sequence number is assigned only once and
      * must never change afterwards.
      */
     private ConversationEntry create(Chat chat, String idempotencyKey, ConversationEntry.EntryType type,
-            ConversationEntry.EntryStatus status, String text, String agentConfigVersion) {
+            ConversationEntry.EntryStatus status, String text, EntryMetadata metadata) {
 
         ConversationEntry entry = new ConversationEntry();
         entry.setChat(chat);
@@ -97,15 +224,15 @@ public class ConversationEntryService {
         entry.setType(type);
         entry.setStatus(status);
         entry.setText(text);
-        entry.setAgentConfigVersion(agentConfigVersion);
+        entry.setAgentConfigVersion(metadata.agentConfigVersion());
+        entry.setUserId(metadata.userId());
+        entry.setMessageType(metadata.messageType());
 
         Long nextSequence = dao.findMaxSequenceByChat(chat) + 1;
 
         entry.setSequence(nextSequence);
-        dao.create(entry);
-        createMessageIfFinished(entry);
-
-        return entry;
+        var created = dao.create(entry);
+        return created == null ? entry : created;
     }
 
     /**
@@ -118,10 +245,10 @@ public class ConversationEntryService {
      * - status transitions must be valid
      */
     private ConversationEntry update(ConversationEntry entry, ConversationEntry.EntryType newType,
-            ConversationEntry.EntryStatus newStatus, String newText, String agentConfigVersion) {
+            ConversationEntry.EntryStatus newStatus, String newText, String agentConfigVersion, String userId) {
 
-        validateImmutableMetadata(entry, newType, agentConfigVersion);
-        if (isNoOps(entry, newStatus, newText, agentConfigVersion)) {
+        validateImmutableMetadata(entry, newType, agentConfigVersion, userId);
+        if (isNoOps(entry, newStatus, newText, agentConfigVersion, userId)) {
             return entry;
         }
         validateTerminalState(entry);
@@ -132,36 +259,38 @@ public class ConversationEntryService {
         if (entry.getAgentConfigVersion() == null) {
             entry.setAgentConfigVersion(agentConfigVersion);
         }
+        if (entry.getUserId() == null) {
+            entry.setUserId(userId);
+        }
 
         final ConversationEntry updated = dao.update(entry);
-        createMessageIfFinished(updated);
+        if (isTerminal(updated.getStatus())) {
+            updateLastMessageDate(updated.getChat(), updated);
+        }
 
         return updated;
     }
 
-    /**
-     * Creates the single chat message for a finished voice turn.
-     * <p>
-     * Only called on the first transition to a terminal state, since terminal entries
-     * are rejected by {@link #validateTerminalState(ConversationEntry)}. The message type
-     * mirrors the entry's type so that voice turns appear in the existing message history
-     * alongside typed chat.
-     */
-    private void createMessageIfFinished(ConversationEntry entry) {
-        if (!isTerminal(entry.getStatus()) || entry.getText() == null || entry.getText().isBlank()) {
+    private void updateLastMessageDate(Chat chat, ConversationEntry entry) {
+        boolean systemMessage = entry.getType() == ConversationEntry.EntryType.SYSTEM
+                || entry.getMessageType() == Message.MessageType.SYSTEM;
+        if (chat == null || (!systemMessage && (entry.getText() == null || entry.getText().isBlank()))) {
             return;
         }
-        Message message = new Message();
-        message.setChat(entry.getChat());
-        message.setText(entry.getText());
-        message.setType(entry.getType() == ConversationEntry.EntryType.HUMAN ? Message.MessageType.HUMAN
-                : Message.MessageType.ASSISTANT);
-        messageDAO.create(message);
+        var date = entry.getModificationDate() != null ? entry.getModificationDate() : entry.getCreationDate();
+        if (date == null) {
+            date = java.time.LocalDateTime.now();
+        }
+        chatDAO.updateLastMessageDate(chat.getId(), date);
+        chat.setLastMessageDate(date);
     }
 
     private boolean isTerminal(ConversationEntry.EntryStatus status) {
         return status == ConversationEntry.EntryStatus.COMPLETED
                 || status == ConversationEntry.EntryStatus.INTERRUPTED;
+    }
+
+    private record EntryMetadata(String agentConfigVersion, String userId, Message.MessageType messageType) {
     }
 
     /**
@@ -170,19 +299,23 @@ public class ConversationEntryService {
      * If nothing changes the request is treated as a no-ops.
      */
     private boolean isNoOps(ConversationEntry entry, ConversationEntry.EntryStatus status, String text,
-            String agentConfigVersion) {
+            String agentConfigVersion, String userId) {
         return Objects.equals(entry.getStatus(), status) && Objects.equals(entry.getText(), text)
-                && (agentConfigVersion == null || Objects.equals(entry.getAgentConfigVersion(), agentConfigVersion));
+                && (agentConfigVersion == null || Objects.equals(entry.getAgentConfigVersion(), agentConfigVersion))
+                && (userId == null || Objects.equals(entry.getUserId(), userId));
     }
 
     private void validateImmutableMetadata(ConversationEntry entry, ConversationEntry.EntryType type,
-            String agentConfigVersion) {
+            String agentConfigVersion, String userId) {
         if (entry.getType() != type) {
             throw new IdempotencyConflictException("Conversation entry type must not change.");
         }
         if (entry.getAgentConfigVersion() != null && agentConfigVersion != null
                 && !Objects.equals(entry.getAgentConfigVersion(), agentConfigVersion)) {
             throw new IdempotencyConflictException("Agent configuration version must not change.");
+        }
+        if (entry.getUserId() != null && userId != null && !Objects.equals(entry.getUserId(), userId)) {
+            throw new IdempotencyConflictException("Conversation entry user must not change.");
         }
     }
 
@@ -223,5 +356,8 @@ public class ConversationEntryService {
             throw new IllegalStateException(
                     "Conversation entry is already in terminal state.");
         }
+    }
+
+    private record OrderedMessage(Message message, Long sequence) {
     }
 }
