@@ -595,7 +595,9 @@ class ConversationEntryServiceTest {
 
     @Test
     void typedMessageRequiresRole() {
-        assertThrows(IllegalArgumentException.class, () -> service.createTypedMessage(new Chat(), new Message()));
+        var chat = new Chat();
+        var message = new Message();
+        assertThrows(IllegalArgumentException.class, () -> service.createTypedMessage(chat, message));
         verify(dao, never()).create(any(ConversationEntry.class));
     }
 

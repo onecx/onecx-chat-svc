@@ -185,13 +185,12 @@ class ConversationEntryMigrationTest {
             var originalSchema = connection.getSchema();
             try {
                 connection.setSchema(schema);
-                var database = DatabaseFactory.getInstance()
-                        .findCorrectDatabaseImplementation(new JdbcConnection(connection));
-                database.setDefaultSchemaName(schema);
-                database.setLiquibaseSchemaName(schema);
                 try (var liquibase = new Liquibase("db/v1/2026-11-12-migrate-typed-messages-to-conversation-entries.xml",
-                        new ClassLoaderResourceAccessor(), database)) {
+                        new ClassLoaderResourceAccessor(), DatabaseFactory.getInstance()
+                                .findCorrectDatabaseImplementation(new JdbcConnection(connection)))) {
                     try {
+                        liquibase.getDatabase().setDefaultSchemaName(schema);
+                        liquibase.getDatabase().setLiquibaseSchemaName(schema);
                         liquibase.update(new Contexts(), new LabelExpression());
                     } finally {
                         // Liquibase closes the pooled connection, so restore its schema first.

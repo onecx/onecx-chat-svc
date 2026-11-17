@@ -169,14 +169,7 @@ public class ConversationEntryService {
                 orderedMessages.add(new OrderedMessage(legacy, entry.getSequence()));
                 representedMessageIds.add(entry.getLegacyMessageId());
             } else {
-                var message = chatMapper.mapEntryAsMessage(entry);
-                orderedMessages.add(new OrderedMessage(message, entry.getSequence()));
-                if (entry.getType() == ConversationEntry.EntryType.TEXT) {
-                    representedMessageIds.add(entry.getId());
-                }
-                if (entry.getLegacyMessageId() != null) {
-                    representedMessageIds.add(entry.getLegacyMessageId());
-                }
+                addMappedEntry(entry, orderedMessages, representedMessageIds);
             }
         }
 
@@ -192,6 +185,18 @@ public class ConversationEntryService {
                 .thenComparing(message -> message.message().getId(),
                         Comparator.nullsLast(Comparator.naturalOrder())));
         return orderedMessages.stream().map(OrderedMessage::message).toList();
+    }
+
+    private void addMappedEntry(ConversationEntry entry, List<OrderedMessage> orderedMessages,
+            Set<String> representedMessageIds) {
+        var message = chatMapper.mapEntryAsMessage(entry);
+        orderedMessages.add(new OrderedMessage(message, entry.getSequence()));
+        if (entry.getType() == ConversationEntry.EntryType.TEXT) {
+            representedMessageIds.add(entry.getId());
+        }
+        if (entry.getLegacyMessageId() != null) {
+            representedMessageIds.add(entry.getLegacyMessageId());
+        }
     }
 
     private boolean isEmptyVoiceEntry(ConversationEntry entry) {
