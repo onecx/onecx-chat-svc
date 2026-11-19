@@ -16,6 +16,7 @@ import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.UriInfo;
 
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.resteasy.reactive.ClientWebApplicationException;
 import org.jboss.resteasy.reactive.RestResponse;
 import org.jboss.resteasy.reactive.server.ServerExceptionMapper;
@@ -26,8 +27,6 @@ import org.tkit.onecx.chat.domain.models.Chat;
 import org.tkit.onecx.chat.domain.models.ConversationEntry;
 import org.tkit.onecx.chat.domain.models.Message;
 import org.tkit.onecx.chat.domain.models.Participant;
-import org.tkit.onecx.chat.rs.internal.clients.AiServiceClientHeadersFactory;
-import org.tkit.onecx.chat.rs.internal.clients.ApmPrincipalTokenContext;
 import org.tkit.onecx.chat.rs.internal.mappers.ChatMapper;
 import org.tkit.onecx.chat.rs.internal.mappers.ExceptionMapper;
 import org.tkit.onecx.chat.rs.internal.services.ChatsService;
@@ -68,6 +67,12 @@ public class ChatsRestController implements ChatsInternalApi {
 
     @Context
     HttpHeaders httpHeaders;
+
+    @ConfigProperty(name = "tkit.rs.context.token.header-param")
+    String principalTokenHeader;
+
+    @ConfigProperty(name = "onecx.user-authorization-header")
+    String userAuthorizationHeader;
 
     @Override
     public Response createChat(CreateChatDTO createChatDTO) {
@@ -129,8 +134,8 @@ public class ChatsRestController implements ChatsInternalApi {
         }
 
         Message message = service.createChatMessage(chat, createMessageDTO,
-                httpHeaders.getHeaderString(ApmPrincipalTokenContext.HEADER_NAME),
-                httpHeaders.getHeaderString(AiServiceClientHeadersFactory.USER_AUTHORIZATION_HEADER_NAME));
+                httpHeaders.getHeaderString(principalTokenHeader),
+                httpHeaders.getHeaderString(userAuthorizationHeader));
         boolean awaitResponse = !Boolean.FALSE.equals(createMessageDTO.getAwaitResponse());
         var location = uriInfo.getAbsolutePathBuilder().path(message.getId()).build();
 

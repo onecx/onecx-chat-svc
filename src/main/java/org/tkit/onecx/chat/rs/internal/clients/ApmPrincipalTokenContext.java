@@ -2,8 +2,6 @@ package org.tkit.onecx.chat.rs.internal.clients;
 
 public final class ApmPrincipalTokenContext {
 
-    public static final String HEADER_NAME = "apm-principal-token";
-
     private static final ThreadLocal<String> HOLDER = new ThreadLocal<>();
 
     private ApmPrincipalTokenContext() {
