@@ -13,13 +13,13 @@ import org.junit.jupiter.api.Test;
 import io.quarkus.test.junit.QuarkusTest;
 
 @QuarkusTest
-class AiServiceClientHeadersFactoryTest {
+class ChatClientHeadersFactoryTest {
 
     private static final String APM_PRINCIPAL_TOKEN = "apm-principal-token";
     private static final String USER_AUTHORIZATION = "UserAuthorization";
 
     @Inject
-    AiServiceClientHeadersFactory factory;
+    ChatClientHeadersFactory factory;
 
     @Test
     void shouldUseIncomingHeadersWhenPresent() {

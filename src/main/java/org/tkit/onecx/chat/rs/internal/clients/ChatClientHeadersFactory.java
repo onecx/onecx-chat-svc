@@ -10,7 +10,7 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.rest.client.ext.ClientHeadersFactory;
 
 @ApplicationScoped
-public class AiServiceClientHeadersFactory implements ClientHeadersFactory {
+public class ChatClientHeadersFactory implements ClientHeadersFactory {
 
     @ConfigProperty(name = "tkit.rs.context.token.header-param")
     String principalTokenHeader;
