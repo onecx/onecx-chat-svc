@@ -1,0 +1,27 @@
+{
+    "sonarlint.disableTelemetry": true,
+    "sonarlint.testFilePattern": "**/test/**",
+    "sonarlint.rules": {
+        "java:S107": {
+            "level": "on"
+        },
+        "java:S135": {
+            "level": "on"
+        },
+        "java:S2093": {
+            "level": "on"
+        },
+        "java:S3358": {
+            "level": "on"
+        },
+        "java:S3776": {
+            "level": "on",
+            "parameters": {
+                "Threshold": "15"
+            }
+        },
+        "java:S5778": {
+            "level": "on"
+        }
+    }
+}

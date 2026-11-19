@@ -22,8 +22,13 @@ bin/
 nb-configuration.xml
 
 # Visual Studio Code
-.vscode
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
 .factorypath
+
+# Local analysis helper bytecode
+scripts/__pycache__/
 
 # OSX
 .DS_Store

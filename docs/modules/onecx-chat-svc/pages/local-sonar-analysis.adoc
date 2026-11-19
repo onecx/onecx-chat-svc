@@ -1,0 +1,68 @@
+= Local Sonar analysis
+
+The shared VS Code settings recommend the Java and SonarQube for IDE extensions,
+identify test sources, and enable the Java rules used by the local checks.
+Telemetry is disabled. Authentication tokens must not be stored in this repository.
+
+== Terminal checks
+
+The runner uses Python 3.8 or newer and its standard library. Install SonarQube
+for IDE and allow its Java analyzer to finish installing. A compatible JDK,
+Git, and a completed Maven test run are also required:
+
+[source,shell]
+----
+mvn test
+python3 scripts/sonar_local.py src/main/java/org/tkit/onecx/chat/rs/internal/services/ConversationEntryService.java
+----
+
+Pass one or more Java file paths. The runner finds the repository root through
+Git and reads dependency paths and the Java source level from Maven Surefire
+reports. Rerun Maven after changing dependencies, switching branches, or cleaning
+the build directory. This is a Maven Java helper, not a general Sonar scanner.
+
+The latest complete extension installation is discovered in the standard local
+and remote VS Code extension directories. No user name, installation version,
+Java path, or project path is hardcoded. Override discovery when needed:
+
+[source,shell]
+----
+python3 scripts/sonar_local.py --extension /path/to/sonarsource.sonarlint-vscode-version --java /path/to/jdk/bin/java src/main/java/example/Example.java
+----
+
+`JAVA_HOME` is used when set; otherwise Java is resolved through `PATH`.
+Use `--ref <commit-or-branch>` to analyze committed file contents without changing
+the working tree, `--output <file>` for JSON diagnostics, and `--timeout <seconds>`
+to change the analysis time limit. Do not write reports into source directories.
+The selected revision must be compatible with the compiled classes and
+dependencies from the current Maven build. To compare incompatible revisions,
+check out and build each revision separately before running the analyzer.
+
+Exit codes are `0` for no findings, `1` for findings, and `2` for missing
+prerequisites, unsupported protocol requests, timeouts, or incomplete analysis.
+Findings cover whole files, including pre-existing issues. Files are analyzed
+sequentially so the server receives their main/test classpaths before analysis.
+
+== Scope and limitations
+
+The runner starts the installed language server locally with only the Java
+analyzer and no server connection. Telemetry is disabled, and no analysis report
+or source code is uploaded. It uses the supported standalone rules plus the
+overrides in `.vscode/settings.json` (strict JSON, without comments).
+
+The language-server protocol is an internal extension API, so extension upgrades
+may require runner changes. Unsupported requests fail explicitly.
+This runner has been exercised with SonarQube for IDE 4.33.0.
+
+Connected mode in the editor requires a SonarCloud sign-in and project binding.
+It can synchronize the team's supported quality-profile settings, but the
+terminal runner deliberately remains standalone. It does not import coverage,
+compute the cloud quality gate, or replace CI. Analyzer versions and rule sets
+may differ from SonarCloud.
+
+Run the runner's focused tests without installing Python dependencies:
+
+[source,shell]
+----
+python3 -m unittest discover -s scripts -p 'test_*.py'
+----
