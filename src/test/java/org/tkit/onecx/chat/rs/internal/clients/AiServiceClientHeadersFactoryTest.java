@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 
+import jakarta.inject.Inject;
 import jakarta.ws.rs.core.MultivaluedHashMap;
 
 import org.junit.jupiter.api.Test;
@@ -14,18 +15,22 @@ import io.quarkus.test.junit.QuarkusTest;
 @QuarkusTest
 class AiServiceClientHeadersFactoryTest {
 
-    private final AiServiceClientHeadersFactory factory = new AiServiceClientHeadersFactory();
+    private static final String APM_PRINCIPAL_TOKEN = "apm-principal-token";
+    private static final String USER_AUTHORIZATION = "UserAuthorization";
+
+    @Inject
+    AiServiceClientHeadersFactory factory;
 
     @Test
     void shouldUseIncomingHeadersWhenPresent() {
         var incomingHeaders = new MultivaluedHashMap<String, String>();
-        incomingHeaders.putSingle(ApmPrincipalTokenContext.HEADER_NAME, "apm-incoming");
-        incomingHeaders.putSingle(AiServiceClientHeadersFactory.USER_AUTHORIZATION_HEADER_NAME, "Bearer incoming-user");
+        incomingHeaders.putSingle(APM_PRINCIPAL_TOKEN, "apm-incoming");
+        incomingHeaders.putSingle(USER_AUTHORIZATION, "Bearer incoming-user");
 
         var result = factory.update(incomingHeaders, new MultivaluedHashMap<>());
 
-        assertThat(result.getFirst(ApmPrincipalTokenContext.HEADER_NAME)).isEqualTo("apm-incoming");
-        assertThat(result.getFirst(AiServiceClientHeadersFactory.USER_AUTHORIZATION_HEADER_NAME))
+        assertThat(result.getFirst(APM_PRINCIPAL_TOKEN)).isEqualTo("apm-incoming");
+        assertThat(result.getFirst(USER_AUTHORIZATION))
                 .isEqualTo("Bearer incoming-user");
     }
 
@@ -35,8 +40,8 @@ class AiServiceClientHeadersFactoryTest {
                 var _ = AiServiceUserAuthorizationContext.withHeader("Bearer thread-user")) {
             var result = factory.update(new MultivaluedHashMap<>(), new MultivaluedHashMap<>());
 
-            assertThat(result.getFirst(ApmPrincipalTokenContext.HEADER_NAME)).isEqualTo("apm-thread");
-            assertThat(result.getFirst(AiServiceClientHeadersFactory.USER_AUTHORIZATION_HEADER_NAME))
+            assertThat(result.getFirst(APM_PRINCIPAL_TOKEN)).isEqualTo("apm-thread");
+            assertThat(result.getFirst(USER_AUTHORIZATION))
                     .isEqualTo("Bearer thread-user");
         }
     }
@@ -44,21 +49,21 @@ class AiServiceClientHeadersFactoryTest {
     @Test
     void shouldReturnHeadersUnchangedWhenAlreadyContainsApmHeader() {
         var clientOutgoingHeaders = new MultivaluedHashMap<String, String>();
-        clientOutgoingHeaders.putSingle(ApmPrincipalTokenContext.HEADER_NAME, "existing-apm-token");
+        clientOutgoingHeaders.putSingle(APM_PRINCIPAL_TOKEN, "existing-apm-token");
 
         var result = factory.update(new MultivaluedHashMap<>(), clientOutgoingHeaders);
 
-        assertThat(result.getFirst(ApmPrincipalTokenContext.HEADER_NAME)).isEqualTo("existing-apm-token");
+        assertThat(result.getFirst(APM_PRINCIPAL_TOKEN)).isEqualTo("existing-apm-token");
     }
 
     @Test
     void shouldReturnHeadersUnchangedWhenAlreadyContainsUserAuthorizationHeader() {
         var clientOutgoingHeaders = new MultivaluedHashMap<String, String>();
-        clientOutgoingHeaders.putSingle(AiServiceClientHeadersFactory.USER_AUTHORIZATION_HEADER_NAME, "Bearer existing-user");
+        clientOutgoingHeaders.putSingle(USER_AUTHORIZATION, "Bearer existing-user");
 
         var result = factory.update(new MultivaluedHashMap<>(), clientOutgoingHeaders);
 
-        assertThat(result.getFirst(AiServiceClientHeadersFactory.USER_AUTHORIZATION_HEADER_NAME))
+        assertThat(result.getFirst(USER_AUTHORIZATION))
                 .isEqualTo("Bearer existing-user");
     }
 
@@ -72,31 +77,31 @@ class AiServiceClientHeadersFactoryTest {
     @Test
     void shouldNotAddHeadersWhenAllValuesAreBlank() {
         var incomingHeaders = new MultivaluedHashMap<String, String>();
-        incomingHeaders.putSingle(ApmPrincipalTokenContext.HEADER_NAME, "   ");
-        incomingHeaders.putSingle(AiServiceClientHeadersFactory.USER_AUTHORIZATION_HEADER_NAME, "   ");
+        incomingHeaders.putSingle(APM_PRINCIPAL_TOKEN, "   ");
+        incomingHeaders.putSingle(USER_AUTHORIZATION, "   ");
 
         var result = factory.update(incomingHeaders, new MultivaluedHashMap<>());
 
-        assertThat(result.containsKey(ApmPrincipalTokenContext.HEADER_NAME)).isFalse();
-        assertThat(result.containsKey(AiServiceClientHeadersFactory.USER_AUTHORIZATION_HEADER_NAME)).isFalse();
+        assertThat(result.containsKey(APM_PRINCIPAL_TOKEN)).isFalse();
+        assertThat(result.containsKey(USER_AUTHORIZATION)).isFalse();
     }
 
     @Test
     void shouldAddIncomingValueWhenNotBlank() {
         var incomingHeaders = new MultivaluedHashMap<String, String>();
-        incomingHeaders.putSingle(ApmPrincipalTokenContext.HEADER_NAME, "valid-apm-token");
+        incomingHeaders.putSingle(APM_PRINCIPAL_TOKEN, "valid-apm-token");
 
         var result = factory.update(incomingHeaders, new MultivaluedHashMap<>());
 
-        assertThat(result.getFirst(ApmPrincipalTokenContext.HEADER_NAME)).isEqualTo("valid-apm-token");
+        assertThat(result.getFirst(APM_PRINCIPAL_TOKEN)).isEqualTo("valid-apm-token");
     }
 
     @Test
     void shouldNotAddHeaderWhenIncomingIsNullAndFallbackIsBlank() {
         var result = factory.update(new MultivaluedHashMap<>(), new MultivaluedHashMap<>());
 
-        assertThat(result.containsKey(ApmPrincipalTokenContext.HEADER_NAME)).isFalse();
-        assertThat(result.containsKey(AiServiceClientHeadersFactory.USER_AUTHORIZATION_HEADER_NAME)).isFalse();
+        assertThat(result.containsKey(APM_PRINCIPAL_TOKEN)).isFalse();
+        assertThat(result.containsKey(USER_AUTHORIZATION)).isFalse();
     }
 
     @Test
@@ -106,7 +111,7 @@ class AiServiceClientHeadersFactoryTest {
 
             var result = factory.update(incomingHeaders, new MultivaluedHashMap<>());
 
-            assertThat(result.getFirst(ApmPrincipalTokenContext.HEADER_NAME)).isEqualTo("fallback-apm-token");
+            assertThat(result.getFirst(APM_PRINCIPAL_TOKEN)).isEqualTo("fallback-apm-token");
         }
     }
 
@@ -114,11 +119,11 @@ class AiServiceClientHeadersFactoryTest {
     void shouldUseFallbackWhenIncomingIsBlankButFallbackIsValid() {
         try (var _ = AiServiceUserAuthorizationContext.withHeader("Bearer fallback-user")) {
             var incomingHeaders = new MultivaluedHashMap<String, String>();
-            incomingHeaders.putSingle(AiServiceClientHeadersFactory.USER_AUTHORIZATION_HEADER_NAME, "   ");
+            incomingHeaders.putSingle(USER_AUTHORIZATION, "   ");
 
             var result = factory.update(incomingHeaders, new MultivaluedHashMap<>());
 
-            assertThat(result.getFirst(AiServiceClientHeadersFactory.USER_AUTHORIZATION_HEADER_NAME))
+            assertThat(result.getFirst(USER_AUTHORIZATION))
                     .isEqualTo("Bearer fallback-user");
         }
     }
@@ -126,21 +131,21 @@ class AiServiceClientHeadersFactoryTest {
     @Test
     void shouldNotAddHeaderWhenBothIncomingAndFallbackAreBlank() {
         var incomingHeaders = new MultivaluedHashMap<String, String>();
-        incomingHeaders.putSingle(ApmPrincipalTokenContext.HEADER_NAME, "   ");
+        incomingHeaders.putSingle(APM_PRINCIPAL_TOKEN, "   ");
 
         var result = factory.update(incomingHeaders, new MultivaluedHashMap<>());
 
-        assertThat(result.containsKey(ApmPrincipalTokenContext.HEADER_NAME)).isFalse();
+        assertThat(result.containsKey(APM_PRINCIPAL_TOKEN)).isFalse();
     }
 
     @Test
     void shouldHandleEmptyHeadersList() {
         var incomingHeaders = new MultivaluedHashMap<String, String>();
-        incomingHeaders.put(ApmPrincipalTokenContext.HEADER_NAME, new ArrayList<>());
+        incomingHeaders.put(APM_PRINCIPAL_TOKEN, new ArrayList<>());
 
         var result = factory.update(incomingHeaders, new MultivaluedHashMap<>());
 
-        assertThat(result.containsKey(ApmPrincipalTokenContext.HEADER_NAME)).isFalse();
+        assertThat(result.containsKey(APM_PRINCIPAL_TOKEN)).isFalse();
     }
 
     @Test
@@ -149,7 +154,7 @@ class AiServiceClientHeadersFactoryTest {
         holder.set("   ");
         try {
             var result = factory.update(new MultivaluedHashMap<>(), new MultivaluedHashMap<>());
-            assertThat(result.containsKey(ApmPrincipalTokenContext.HEADER_NAME)).isFalse();
+            assertThat(result.containsKey(APM_PRINCIPAL_TOKEN)).isFalse();
         } finally {
             holder.remove();
         }

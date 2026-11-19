@@ -2,12 +2,18 @@ package org.tkit.onecx.chat.rs.internal.clients;
 
 import java.util.List;
 
+import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.ws.rs.core.MultivaluedHashMap;
 import jakarta.ws.rs.core.MultivaluedMap;
 
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.rest.client.ext.ClientHeadersFactory;
 
+@ApplicationScoped
 public class ApmPrincipalTokenClientHeadersFactory implements ClientHeadersFactory {
+
+    @ConfigProperty(name = "tkit.rs.context.token.header-param")
+    String principalTokenHeader;
 
     @Override
     public MultivaluedMap<String, String> update(MultivaluedMap<String, String> incomingHeaders,
@@ -15,17 +21,17 @@ public class ApmPrincipalTokenClientHeadersFactory implements ClientHeadersFacto
         var headers = new MultivaluedHashMap<String, String>();
         headers.putAll(clientOutgoingHeaders);
 
-        if (headers.containsKey(ApmPrincipalTokenContext.HEADER_NAME)) {
+        if (headers.containsKey(principalTokenHeader)) {
             return headers;
         }
 
-        var token = getFirst(incomingHeaders, ApmPrincipalTokenContext.HEADER_NAME);
+        var token = getFirst(incomingHeaders, principalTokenHeader);
         if (token == null || token.isBlank()) {
             token = ApmPrincipalTokenContext.getToken();
         }
 
         if (token != null && !token.isBlank()) {
-            headers.putSingle(ApmPrincipalTokenContext.HEADER_NAME, token);
+            headers.putSingle(principalTokenHeader, token);
         }
 
         return headers;

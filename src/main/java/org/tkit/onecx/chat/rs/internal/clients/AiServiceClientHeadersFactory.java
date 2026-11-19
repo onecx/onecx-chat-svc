@@ -2,14 +2,21 @@ package org.tkit.onecx.chat.rs.internal.clients;
 
 import java.util.List;
 
+import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.ws.rs.core.MultivaluedHashMap;
 import jakarta.ws.rs.core.MultivaluedMap;
 
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.rest.client.ext.ClientHeadersFactory;
 
+@ApplicationScoped
 public class AiServiceClientHeadersFactory implements ClientHeadersFactory {
 
-    public static final String USER_AUTHORIZATION_HEADER_NAME = "UserAuthorization";
+    @ConfigProperty(name = "tkit.rs.context.token.header-param")
+    String principalTokenHeader;
+
+    @ConfigProperty(name = "onecx.user-authorization-header")
+    String userAuthorizationHeader;
 
     @Override
     public MultivaluedMap<String, String> update(MultivaluedMap<String, String> incomingHeaders,
@@ -17,11 +24,11 @@ public class AiServiceClientHeadersFactory implements ClientHeadersFactory {
         var headers = new MultivaluedHashMap<String, String>();
         headers.putAll(clientOutgoingHeaders);
 
-        addIfMissing(headers, ApmPrincipalTokenContext.HEADER_NAME,
-                firstValue(incomingHeaders, ApmPrincipalTokenContext.HEADER_NAME),
+        addIfMissing(headers, principalTokenHeader,
+                firstValue(incomingHeaders, principalTokenHeader),
                 ApmPrincipalTokenContext.getToken());
-        addIfMissing(headers, USER_AUTHORIZATION_HEADER_NAME,
-                firstValue(incomingHeaders, USER_AUTHORIZATION_HEADER_NAME),
+        addIfMissing(headers, userAuthorizationHeader,
+                firstValue(incomingHeaders, userAuthorizationHeader),
                 AiServiceUserAuthorizationContext.getHeader());
 
         return headers;

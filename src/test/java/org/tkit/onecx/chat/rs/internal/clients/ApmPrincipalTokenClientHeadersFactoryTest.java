@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 
+import jakarta.inject.Inject;
 import jakarta.ws.rs.core.MultivaluedHashMap;
 
 import org.junit.jupiter.api.Test;
@@ -14,16 +15,19 @@ import io.quarkus.test.junit.QuarkusTest;
 @QuarkusTest
 class ApmPrincipalTokenClientHeadersFactoryTest {
 
-    private final ApmPrincipalTokenClientHeadersFactory factory = new ApmPrincipalTokenClientHeadersFactory();
+    private static final String APM_PRINCIPAL_TOKEN = "apm-principal-token";
+
+    @Inject
+    ApmPrincipalTokenClientHeadersFactory factory;
 
     @Test
     void shouldUseIncomingHeaderWhenPresent() {
         var incomingHeaders = new MultivaluedHashMap<String, String>();
-        incomingHeaders.putSingle(ApmPrincipalTokenContext.HEADER_NAME, "incoming-token");
+        incomingHeaders.putSingle(APM_PRINCIPAL_TOKEN, "incoming-token");
 
         var result = factory.update(incomingHeaders, new MultivaluedHashMap<>());
 
-        assertThat(result.getFirst(ApmPrincipalTokenContext.HEADER_NAME)).isEqualTo("incoming-token");
+        assertThat(result.getFirst(APM_PRINCIPAL_TOKEN)).isEqualTo("incoming-token");
     }
 
     @Test
@@ -31,35 +35,35 @@ class ApmPrincipalTokenClientHeadersFactoryTest {
         try (var _ = ApmPrincipalTokenContext.withToken("thread-token")) {
             var result = factory.update(new MultivaluedHashMap<>(), new MultivaluedHashMap<>());
 
-            assertThat(result.getFirst(ApmPrincipalTokenContext.HEADER_NAME)).isEqualTo("thread-token");
+            assertThat(result.getFirst(APM_PRINCIPAL_TOKEN)).isEqualTo("thread-token");
         }
     }
 
     @Test
     void shouldReturnHeadersUnchangedWhenAlreadyContainsToken() {
         var clientOutgoingHeaders = new MultivaluedHashMap<String, String>();
-        clientOutgoingHeaders.putSingle(ApmPrincipalTokenContext.HEADER_NAME, "existing-token");
+        clientOutgoingHeaders.putSingle(APM_PRINCIPAL_TOKEN, "existing-token");
 
         var result = factory.update(new MultivaluedHashMap<>(), clientOutgoingHeaders);
 
-        assertThat(result.getFirst(ApmPrincipalTokenContext.HEADER_NAME)).isEqualTo("existing-token");
+        assertThat(result.getFirst(APM_PRINCIPAL_TOKEN)).isEqualTo("existing-token");
     }
 
     @Test
     void shouldNotAddTokenWhenBothIncomingAndThreadLocalAreBlank() {
         var incomingHeaders = new MultivaluedHashMap<String, String>();
-        incomingHeaders.putSingle(ApmPrincipalTokenContext.HEADER_NAME, "   ");
+        incomingHeaders.putSingle(APM_PRINCIPAL_TOKEN, "   ");
 
         var result = factory.update(incomingHeaders, new MultivaluedHashMap<>());
 
-        assertThat(result.containsKey(ApmPrincipalTokenContext.HEADER_NAME)).isFalse();
+        assertThat(result.containsKey(APM_PRINCIPAL_TOKEN)).isFalse();
     }
 
     @Test
     void shouldNotAddTokenWhenBothIncomingAndThreadLocalAreNull() {
         var result = factory.update(new MultivaluedHashMap<>(), new MultivaluedHashMap<>());
 
-        assertThat(result.containsKey(ApmPrincipalTokenContext.HEADER_NAME)).isFalse();
+        assertThat(result.containsKey(APM_PRINCIPAL_TOKEN)).isFalse();
     }
 
     @Test
@@ -69,18 +73,18 @@ class ApmPrincipalTokenClientHeadersFactoryTest {
         try (var _ = ApmPrincipalTokenContext.withToken("thread-token")) {
             var result = factory.update(null, clientOutgoingHeaders);
 
-            assertThat(result.getFirst(ApmPrincipalTokenContext.HEADER_NAME)).isEqualTo("thread-token");
+            assertThat(result.getFirst(APM_PRINCIPAL_TOKEN)).isEqualTo("thread-token");
         }
     }
 
     @Test
     void shouldHandleEmptyIncomingHeaderValuesList() {
         var incomingHeaders = new MultivaluedHashMap<String, String>();
-        incomingHeaders.put(ApmPrincipalTokenContext.HEADER_NAME, new ArrayList<>());
+        incomingHeaders.put(APM_PRINCIPAL_TOKEN, new ArrayList<>());
 
         var result = factory.update(incomingHeaders, new MultivaluedHashMap<>());
 
-        assertThat(result.containsKey(ApmPrincipalTokenContext.HEADER_NAME)).isFalse();
+        assertThat(result.containsKey(APM_PRINCIPAL_TOKEN)).isFalse();
     }
 
     @Test
@@ -89,7 +93,7 @@ class ApmPrincipalTokenClientHeadersFactoryTest {
         holder.set("   ");
         try {
             var result = factory.update(new MultivaluedHashMap<>(), new MultivaluedHashMap<>());
-            assertThat(result.containsKey(ApmPrincipalTokenContext.HEADER_NAME)).isFalse();
+            assertThat(result.containsKey(APM_PRINCIPAL_TOKEN)).isFalse();
         } finally {
             holder.remove();
         }
