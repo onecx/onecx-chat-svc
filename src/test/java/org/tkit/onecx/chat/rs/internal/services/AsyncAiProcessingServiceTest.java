@@ -50,6 +50,9 @@ class AsyncAiProcessingServiceTest {
     ChatMapper mapper;
 
     @InjectMock
+    ConversationEntryService conversationEntryService;
+
+    @InjectMock
     @RestClient
     DispatchApi dispatchClient;
 
@@ -76,6 +79,52 @@ class AsyncAiProcessingServiceTest {
         service.process("chat-id", "message-id", new RequestContext(), null, null);
 
         verifyNoInteractions(dispatchClient, notificationClient);
+        verify(messageDao, never()).create(any(Message.class));
+    }
+
+    @Test
+    void processShouldSkipDispatchWhenResponseAlreadyExists() {
+        var chat = new Chat();
+        chat.setId("chat-id");
+        var message = new Message();
+        message.setId("message-id");
+
+        when(chatDao.findById("chat-id")).thenReturn(chat);
+        when(conversationEntryService.findMessageById(chat, "message-id")).thenReturn(message);
+        when(conversationEntryService.hasAiResponse(chat, "message-id")).thenReturn(true);
+
+        service.process("chat-id", "message-id", new RequestContext(), null, null);
+
+        verifyNoInteractions(dispatchClient, notificationClient);
+    }
+
+    @Test
+    void synchronousDispatchSkipsRequestsWithAnExistingResponse() {
+        var chat = new Chat();
+        var message = new Message();
+        message.setId("request");
+        when(conversationEntryService.hasAiResponse(chat, "request")).thenReturn(true);
+
+        service.forwardToAiAndStore(chat, message, new RequestContext(), null, null);
+
+        verifyNoInteractions(dispatchClient, notificationClient, mapper);
+    }
+
+    @Test
+    void humanAiResponsePreservesItsRoleAndUser() {
+        var chat = new Chat();
+        var response = new ChatMessage();
+        response.setConversationId("request");
+        var message = new Message();
+        message.setType(Message.MessageType.HUMAN);
+        message.setText("Follow-up");
+        message.setUserId("user");
+        when(chatDao.findById("chat")).thenReturn(chat);
+        when(mapper.mapAiSvcMessage(response)).thenReturn(message);
+
+        service.storeAiResponse("chat", response);
+
+        verify(conversationEntryService).createAiResponse(chat, "request", Message.MessageType.HUMAN, "Follow-up", "user");
         verify(messageDao, never()).create(any(Message.class));
     }
 
@@ -110,6 +159,8 @@ class AsyncAiProcessingServiceTest {
         aiChatMessage.setMessage("AI response");
         aiChatMessage.setType(ChatMessage.TypeEnum.ASSISTANT);
         var persistedAiMessage = new Message();
+        persistedAiMessage.setType(Message.MessageType.ASSISTANT);
+        persistedAiMessage.setText("AI response");
 
         when(chatDao.findById(chatId)).thenReturn(chat);
         when(messageDao.findById(messageId)).thenReturn(message);
@@ -120,7 +171,9 @@ class AsyncAiProcessingServiceTest {
 
         service.process(chatId, messageId, new RequestContext(), null, null);
 
-        verify(messageDao).create(persistedAiMessage);
+        verify(conversationEntryService).createAiResponse(chat, messageId, Message.MessageType.ASSISTANT,
+                "AI response", null);
+        verify(messageDao, never()).create(any(Message.class));
         var notificationCaptor = ArgumentCaptor.forClass(Notification.class);
         verify(notificationClient, times(1)).dispatchNotification(notificationCaptor.capture());
 
@@ -156,6 +209,8 @@ class AsyncAiProcessingServiceTest {
         aiChatMessage.setMessage("AI response");
         aiChatMessage.setType(ChatMessage.TypeEnum.ASSISTANT);
         var persistedAiMessage = new Message();
+        persistedAiMessage.setType(Message.MessageType.ASSISTANT);
+        persistedAiMessage.setText("AI response");
 
         when(chatDao.findById(chatId)).thenReturn(chat);
         when(messageDao.findById(messageId)).thenReturn(message);
@@ -166,7 +221,9 @@ class AsyncAiProcessingServiceTest {
 
         service.process(chatId, messageId, new RequestContext(), null, null);
 
-        verify(messageDao).create(persistedAiMessage);
+        verify(conversationEntryService).createAiResponse(chat, messageId, Message.MessageType.ASSISTANT,
+                "AI response", null);
+        verify(messageDao, never()).create(any(Message.class));
         var notificationCaptor = ArgumentCaptor.forClass(Notification.class);
         verify(notificationClient, times(1)).dispatchNotification(notificationCaptor.capture());
 
@@ -202,6 +259,8 @@ class AsyncAiProcessingServiceTest {
         aiChatMessage.setMessage("AI response");
         aiChatMessage.setType(ChatMessage.TypeEnum.ASSISTANT);
         var persistedAiMessage = new Message();
+        persistedAiMessage.setType(Message.MessageType.ASSISTANT);
+        persistedAiMessage.setText("AI response");
 
         when(chatDao.findById(chatId)).thenReturn(chat);
         when(messageDao.findById(messageId)).thenReturn(message);
@@ -212,7 +271,9 @@ class AsyncAiProcessingServiceTest {
 
         service.process(chatId, messageId, new RequestContext(), null, null);
 
-        verify(messageDao).create(persistedAiMessage);
+        verify(conversationEntryService).createAiResponse(chat, messageId, Message.MessageType.ASSISTANT,
+                "AI response", null);
+        verify(messageDao, never()).create(any(Message.class));
         verify(notificationClient, never()).dispatchNotification(any(Notification.class));
     }
 
@@ -246,6 +307,8 @@ class AsyncAiProcessingServiceTest {
         aiChatMessage.setMessage("AI response");
         aiChatMessage.setType(ChatMessage.TypeEnum.ASSISTANT);
         var persistedAiMessage = new Message();
+        persistedAiMessage.setType(Message.MessageType.ASSISTANT);
+        persistedAiMessage.setText("AI response");
         var notificationResponse = mock(Response.class);
 
         when(chatDao.findById(chatId)).thenReturn(chat);
@@ -273,5 +336,24 @@ class AsyncAiProcessingServiceTest {
 
         verify(mapper, never()).mapAiSvcMessage(any(ChatMessage.class));
         verify(messageDao, never()).create(any(Message.class));
+    }
+
+    @Test
+    void actionResponseKeepsExistingToolCallPersistenceBehavior() {
+        var chat = new Chat();
+        chat.setId("chat-id");
+        var response = new ChatMessage();
+        response.setType(ChatMessage.TypeEnum.ACTION);
+        response.setMessage("tool call");
+        var actionMessage = new Message();
+
+        when(chatDao.findById("chat-id")).thenReturn(chat);
+        when(mapper.mapAiSvcMessage(response)).thenReturn(actionMessage);
+
+        service.storeAiResponse("chat-id", response);
+
+        Assertions.assertSame(chat, actionMessage.getChat());
+        verify(messageDao).create(actionMessage);
+        verify(conversationEntryService, never()).createAiResponse(any(), anyString(), any(), anyString(), any());
     }
 }

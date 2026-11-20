@@ -15,7 +15,8 @@ import lombok.Setter;
 @Entity
 @Table(name = "CONVERSATION_ENTRY", uniqueConstraints = {
         @UniqueConstraint(name = "UK_CONV_ENTRY_CHAT_SEQ", columnNames = { "CHAT_ID", "SEQUENCE_NO" }),
-        @UniqueConstraint(name = "UK_CONV_ENTRY_IDEMP", columnNames = { "CHAT_ID", "IDEMPOTENCY_KEY" })
+        @UniqueConstraint(name = "UK_CONV_ENTRY_IDEMP", columnNames = { "CHAT_ID", "IDEMPOTENCY_KEY" }),
+        @UniqueConstraint(name = "UK_CONV_ENTRY_LEGACY_MESSAGE", columnNames = { "LEGACY_MESSAGE_ID" })
 })
 public class ConversationEntry extends TraceableEntity {
 
@@ -39,6 +40,16 @@ public class ConversationEntry extends TraceableEntity {
     @Column(name = "AGENT_CONFIG_VERSION", length = 255)
     private String agentConfigVersion;
 
+    @Column(name = "USER_ID")
+    private String userId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "MESSAGE_TYPE")
+    private Message.MessageType messageType;
+
+    @Column(name = "LEGACY_MESSAGE_ID")
+    private String legacyMessageId;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "TYPE", nullable = false)
     private EntryType type;
@@ -56,18 +67,23 @@ public class ConversationEntry extends TraceableEntity {
         return Objects.equals(tenantId, that.tenantId) && Objects.equals(chat, that.chat)
                 && Objects.equals(sequence, that.sequence) && Objects.equals(idempotencyKey, that.idempotencyKey)
                 && Objects.equals(text, that.text) && Objects.equals(agentConfigVersion, that.agentConfigVersion)
+                && Objects.equals(userId, that.userId)
+                && Objects.equals(legacyMessageId, that.legacyMessageId)
+                && messageType == that.messageType
                 && type == that.type && status == that.status;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(super.hashCode(), tenantId, chat, sequence, idempotencyKey, text, agentConfigVersion, type,
-                status);
+        return Objects.hash(super.hashCode(), tenantId, chat, sequence, idempotencyKey, text, agentConfigVersion,
+                userId, messageType, legacyMessageId, type, status);
     }
 
     public enum EntryType {
+        TEXT,
         HUMAN,
-        ASSISTANT
+        ASSISTANT,
+        SYSTEM
     }
 
     public enum EntryStatus {
