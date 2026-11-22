@@ -1,0 +1,213 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet author="onecx" id="2026-11-12-typed-messages-to-conversation-entries">
+        <addColumn tableName="conversation_entry">
+            <column name="user_id" type="VARCHAR(255)"/>
+            <column name="message_type" type="VARCHAR(255)"/>
+            <column name="legacy_message_id" type="VARCHAR(255)"/>
+        </addColumn>
+        <addUniqueConstraint tableName="conversation_entry" columnNames="legacy_message_id"
+                constraintName="uk_conv_entry_legacy_message"/>
+        <sql>
+            ALTER TABLE conversation_entry
+            ADD CONSTRAINT ck_conv_entry_text_role
+            CHECK (type &lt;&gt; 'TEXT' OR message_type IN ('HUMAN', 'ASSISTANT', 'SYSTEM'))
+        </sql>
+        <comment>Backfill typed messages without duplicating matching terminal voice entries.</comment>
+        <sql splitStatements="false">
+            DO $$
+            BEGIN
+                IF EXISTS (
+                    SELECT 1
+                    FROM message m
+                    WHERE m.type IS NOT NULL
+                      AND m.type NOT IN ('HUMAN', 'ASSISTANT', 'SYSTEM')
+                ) THEN
+                    RAISE EXCEPTION 'Cannot migrate messages with an unsupported message role';
+                END IF;
+
+                IF EXISTS (
+                    SELECT 1
+                    FROM message m
+                    WHERE m.type IN ('HUMAN', 'ASSISTANT', 'SYSTEM')
+                      AND NOT EXISTS (
+                          SELECT 1 FROM chat c
+                          WHERE c.guid = m.chat_id AND c.tenant_id = m.tenant_id
+                      )
+                ) THEN
+                    RAISE EXCEPTION 'Cannot migrate messages with missing or mismatched chat ownership';
+                END IF;
+
+                IF EXISTS (
+                    SELECT 1
+                    FROM message m
+                    JOIN conversation_entry e
+                      ON e.chat_id = m.chat_id
+                     AND e.tenant_id = m.tenant_id
+                     AND CASE WHEN e.type = 'TEXT' THEN e.message_type ELSE e.type END = m.type
+                     AND e.text IS NOT DISTINCT FROM m.text
+                     AND e.user_id IS NOT DISTINCT FROM m.user_id
+                     AND e.creationuser IS NOT DISTINCT FROM m.creationuser
+                    WHERE m.type IN ('HUMAN', 'ASSISTANT', 'SYSTEM')
+                      AND (m.creationdate IS NULL OR COALESCE(e.modificationdate, e.creationdate) IS NULL)
+                ) THEN
+                    RAISE EXCEPTION 'Cannot distinguish legacy message mirrors with null timestamps';
+                END IF;
+
+                IF EXISTS (
+                    SELECT 1
+                    FROM message m
+                    JOIN conversation_entry e
+                      ON e.chat_id = m.chat_id
+                     AND e.tenant_id = m.tenant_id
+                     AND e.type = m.type
+                     AND e.text IS NOT DISTINCT FROM m.text
+                     AND COALESCE(e.modificationdate, e.creationdate)
+                         BETWEEN m.creationdate - INTERVAL '1 second'
+                             AND m.creationdate + INTERVAL '1 second'
+                    WHERE m.type IN ('HUMAN', 'ASSISTANT')
+                      AND e.status IN ('COMPLETED', 'INTERRUPTED')
+                      AND (e.user_id IS DISTINCT FROM m.user_id
+                           OR e.creationuser IS DISTINCT FROM m.creationuser)
+                ) THEN
+                    RAISE EXCEPTION 'Cannot distinguish potential voice mirrors with mismatched ownership metadata';
+                END IF;
+
+                IF EXISTS (
+                    SELECT m.guid
+                    FROM message m
+                    JOIN conversation_entry e
+                      ON e.chat_id = m.chat_id
+                     AND e.tenant_id = m.tenant_id
+                     AND CASE WHEN e.type = 'TEXT' THEN e.message_type ELSE e.type END = m.type
+                     AND e.text IS NOT DISTINCT FROM m.text
+                     AND e.user_id IS NOT DISTINCT FROM m.user_id
+                     AND e.creationuser IS NOT DISTINCT FROM m.creationuser
+                     AND COALESCE(e.modificationdate, e.creationdate)
+                         BETWEEN m.creationdate - INTERVAL '1 second'
+                             AND m.creationdate + INTERVAL '1 second'
+                    WHERE m.type IN ('HUMAN', 'ASSISTANT', 'SYSTEM')
+                    GROUP BY m.guid
+                    HAVING COUNT(*) > 1
+                ) THEN
+                    RAISE EXCEPTION 'Cannot distinguish multiple matching conversation entries for a legacy message';
+                END IF;
+
+                IF EXISTS (
+                    SELECT 1
+                    FROM message m
+                    JOIN conversation_entry e ON e.guid = m.guid
+                    WHERE m.type IN ('HUMAN', 'ASSISTANT', 'SYSTEM')
+                      AND e.idempotency_key &lt;&gt; 'legacy-message:' || m.guid
+                ) THEN
+                    RAISE EXCEPTION 'Legacy message ID conflicts with a conversation entry ID';
+                END IF;
+
+                IF EXISTS (
+                    SELECT 1
+                    FROM message m
+                    WHERE LENGTH('legacy-message:' || m.guid) > 255
+                ) THEN
+                    RAISE EXCEPTION 'Legacy message ID is too long for a stable idempotency key';
+                END IF;
+            END
+            $$;
+        </sql>
+        <sql>
+            WITH candidate_messages AS (
+            SELECT m.*,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY m.chat_id, m.tenant_id, m.type, m.text, m.user_id, m.creationuser
+                       ORDER BY m.creationdate ASC NULLS LAST, m.guid
+                   ) AS matching_row
+            FROM message m
+                JOIN chat c ON c.guid = m.chat_id AND c.tenant_id = m.tenant_id
+                WHERE m.type IN ('HUMAN', 'ASSISTANT')
+            ),
+            ranked_voice_entries AS (
+                SELECT e.guid, e.chat_id, e.tenant_id, e.type, e.text, e.user_id, e.creationuser,
+                       COALESCE(e.modificationdate, e.creationdate) AS terminal_date,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY e.chat_id, e.tenant_id, e.type, e.text, e.user_id, e.creationuser
+                           ORDER BY COALESCE(e.modificationdate, e.creationdate) ASC NULLS LAST, e.guid
+                       ) AS matching_row
+                FROM conversation_entry e
+                WHERE e.type IN ('HUMAN', 'ASSISTANT')
+                  AND e.status IN ('COMPLETED', 'INTERRUPTED')
+                  AND e.legacy_message_id IS NULL
+            )
+            UPDATE conversation_entry e
+            SET legacy_message_id = m.guid
+            FROM candidate_messages m
+            JOIN ranked_voice_entries v
+              ON v.chat_id = m.chat_id
+             AND v.tenant_id = m.tenant_id
+             AND v.type = m.type
+             AND v.text IS NOT DISTINCT FROM m.text
+             AND v.user_id IS NOT DISTINCT FROM m.user_id
+             AND v.creationuser IS NOT DISTINCT FROM m.creationuser
+             AND v.matching_row = m.matching_row
+             AND v.terminal_date BETWEEN m.creationdate - INTERVAL '1 second'
+                                     AND m.creationdate + INTERVAL '1 second'
+            WHERE e.guid = v.guid;
+        </sql>
+        <sql>
+            WITH candidate_messages AS (
+                SELECT m.*
+                FROM message m
+                JOIN chat c ON c.guid = m.chat_id AND c.tenant_id = m.tenant_id
+                WHERE m.type IN ('HUMAN', 'ASSISTANT', 'SYSTEM')
+            ),
+            messages_to_backfill AS (
+                SELECT m.*
+                FROM candidate_messages m
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM conversation_entry e
+                    WHERE e.chat_id = m.chat_id
+                      AND e.tenant_id = m.tenant_id
+                      AND e.idempotency_key = 'legacy-message:' || m.guid
+                )
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM conversation_entry e
+                      WHERE e.chat_id = m.chat_id
+                        AND e.tenant_id = m.tenant_id
+                        AND e.legacy_message_id = m.guid
+                  )
+            )
+            INSERT INTO conversation_entry
+                (guid, optlock, tenant_id, chat_id, sequence_no, idempotency_key, text, type, status, user_id,
+                 message_type, creationdate, modificationdate, creationuser, modificationuser)
+            SELECT
+                m.guid,
+                m.optlock,
+                m.tenant_id,
+                m.chat_id,
+                COALESCE((
+                    SELECT MAX(e.sequence_no)
+                    FROM conversation_entry e
+                    WHERE e.chat_id = m.chat_id
+                      AND e.tenant_id = m.tenant_id
+                ), 0) + ROW_NUMBER() OVER (
+                    PARTITION BY m.chat_id, m.tenant_id
+                    ORDER BY m.creationdate ASC NULLS LAST, m.guid
+                ),
+                'legacy-message:' || m.guid,
+                m.text,
+                'TEXT',
+                'COMPLETED',
+                m.user_id,
+                m.type,
+                m.creationdate,
+                m.modificationdate,
+                m.creationuser,
+                m.modificationuser
+            FROM messages_to_backfill m
+        </sql>
+    </changeSet>
+</databaseChangeLog>

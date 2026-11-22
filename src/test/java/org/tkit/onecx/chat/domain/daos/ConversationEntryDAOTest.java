@@ -43,6 +43,12 @@ class ConversationEntryDAOTest {
         methodExceptionTests(
                 () -> dao.findReplayEntries(Mockito.mock(Chat.class)),
                 ConversationEntryDAO.ErrorKeys.ERROR_FIND_CONVERSATION_ENTRY_REPLAY_ENTRIES);
+
+        Mockito.when(em.createQuery("delete from ConversationEntry e where e.chat = :chat"))
+                .thenThrow(new IllegalStateException("Test delete failure"));
+        methodExceptionTests(
+                () -> dao.deleteByChat(new Chat()),
+                ConversationEntryDAO.ErrorKeys.ERROR_DELETE_CONVERSATION_ENTRIES_BY_CHAT);
     }
 
     void methodExceptionTests(Executable fn, Enum<?> key) {
