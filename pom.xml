@@ -215,6 +215,18 @@
                             <modelNameSuffix>DTO</modelNameSuffix>
                         </configuration>
                     </execution>
+                    <execution>
+                        <id>v1</id>
+                        <goals>
+                            <goal>generate</goal>
+                        </goals>
+                        <configuration>
+                            <inputSpec>src/main/openapi/onecx-chat-v1.yaml</inputSpec>
+                            <apiPackage>gen.org.tkit.onecx.chat.rs.v1</apiPackage>
+                            <modelPackage>gen.org.tkit.onecx.chat.rs.v1.model</modelPackage>
+                            <modelNameSuffix>DTO</modelNameSuffix>
+                        </configuration>
+                    </execution>
                 </executions>
             </plugin>
             <plugin>

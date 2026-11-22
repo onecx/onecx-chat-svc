@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<dataset>
+
+	<!--
+		Dedicated fixtures for GET /v1/chats/{chatId} (principal-aware access).
+		Only the tables present here (CHAT, PARTICIPANT, CHAT_PARTICIPANT) are touched
+		by @WithDBData, so this does not interfere with the shared testdata-internal.xml.
+		Principal used by AbstractTest#createToken is preferred_username/sub = "test-user".
+	-->
+
+	<!-- CHAT -->
+	<!-- Owned by test-user (tenant-100): owner access -> 200 -->
+	<CHAT guid="t-chat-v1-owner-01" optlock="0" type="HUMAN_DIRECT_CHAT" app_id="appId" tenant_id="tenant-100" creationuser="test-user" topic="v1 owner chat" user_id="test-user"/>
+	<!-- Owned by user1 with test-user as a participant (tenant-100): participant access -> 200 -->
+	<CHAT guid="t-chat-v1-group-01" optlock="0" type="HUMAN_GROUP_CHAT" app_id="appId" tenant_id="tenant-100" creationuser="user1" topic="v1 group chat" user_id="user1"/>
+	<!-- Owned by user1, test-user not a participant (tenant-100): no access -> 404 -->
+	<CHAT guid="t-chat-v1-other-01" optlock="0" type="HUMAN_GROUP_CHAT" app_id="appId" tenant_id="tenant-100" creationuser="user1" topic="v1 other chat" user_id="user1"/>
+	<!-- Owned by test-user but in a different tenant (tenant-200): not visible to tenant-100 -> 404 -->
+	<CHAT guid="t-chat-v1-xtenant-01" optlock="0" type="HUMAN_GROUP_CHAT" app_id="appId" tenant_id="tenant-200" creationuser="test-user" topic="v1 cross tenant chat" user_id="test-user"/>
+
+	<!-- PARTICIPANT -->
+	<PARTICIPANT guid="t-participant-v1-group-01" optlock="0" type="HUMAN" user_id="test-user" user_name="TestUser" email="test-user@example.com" tenant_id="tenant-100"/>
+	<PARTICIPANT guid="t-participant-v1-other-01" optlock="0" type="HUMAN" user_id="user1" user_name="Human" email="user1@example.com" tenant_id="tenant-100"/>
+
+	<!-- CHAT_PARTICIPANT -->
+	<CHAT_PARTICIPANT chat_guid="t-chat-v1-group-01" participant_guid="t-participant-v1-group-01"/>
+	<CHAT_PARTICIPANT chat_guid="t-chat-v1-other-01" participant_guid="t-participant-v1-other-01"/>
+
+</dataset>
