@@ -39,6 +39,12 @@ public class ConversationEntry extends TraceableEntity {
     @Column(name = "AGENT_CONFIG_VERSION", length = 255)
     private String agentConfigVersion;
 
+    @Column(name = "CAUSAL_REFERENCE")
+    private String causalReference;
+
+    @Column(name = "EVENT_SNAPSHOT", columnDefinition = "TEXT")
+    private String eventSnapshot;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "TYPE", nullable = false)
     private EntryType type;
@@ -56,18 +62,25 @@ public class ConversationEntry extends TraceableEntity {
         return Objects.equals(tenantId, that.tenantId) && Objects.equals(chat, that.chat)
                 && Objects.equals(sequence, that.sequence) && Objects.equals(idempotencyKey, that.idempotencyKey)
                 && Objects.equals(text, that.text) && Objects.equals(agentConfigVersion, that.agentConfigVersion)
+                && Objects.equals(causalReference, that.causalReference)
+                && Objects.equals(eventSnapshot, that.eventSnapshot)
                 && type == that.type && status == that.status;
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(super.hashCode(), tenantId, chat, sequence, idempotencyKey, text, agentConfigVersion, type,
-                status);
+                status, causalReference, eventSnapshot);
     }
 
     public enum EntryType {
         HUMAN,
-        ASSISTANT
+        ASSISTANT,
+        TOOL_REQUEST,
+        TOOL_DECISION,
+        TOOL_EXECUTION,
+        TOOL_RESULT,
+        TOOL_CONTINUATION
     }
 
     public enum EntryStatus {

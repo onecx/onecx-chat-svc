@@ -52,6 +52,10 @@ public class ConversationEntryService {
         chatDAO.lock(chat.getId());
         final String idempotencyKey = entry.getIdempotencyKey();
         ConversationEntry.EntryType actualType = chatMapper.mapConversationType(entry.getType());
+        if (actualType != ConversationEntry.EntryType.HUMAN
+                && actualType != ConversationEntry.EntryType.ASSISTANT) {
+            throw new IdempotencyConflictException("Tool lifecycle events cannot be written as checkpoints.");
+        }
         ConversationEntry.EntryStatus actualStatus = chatMapper.mapConversationStatus(entry.getStatus());
         final String newText = entry.getText();
         final String agentConfigVersion = entry.getAgentConfigVersion();
@@ -148,7 +152,9 @@ public class ConversationEntryService {
      * alongside typed chat.
      */
     private void createMessageIfFinished(ConversationEntry entry) {
-        if (!isTerminal(entry.getStatus()) || entry.getText() == null || entry.getText().isBlank()) {
+        if ((entry.getType() != ConversationEntry.EntryType.HUMAN
+                && entry.getType() != ConversationEntry.EntryType.ASSISTANT)
+                || !isTerminal(entry.getStatus()) || entry.getText() == null || entry.getText().isBlank()) {
             return;
         }
         Message message = new Message();

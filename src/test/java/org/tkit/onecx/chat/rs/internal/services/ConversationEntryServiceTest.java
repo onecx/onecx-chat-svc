@@ -452,6 +452,25 @@ class ConversationEntryServiceTest {
         verify(msgDao, never()).create(any(Message.class));
     }
 
+    @Test
+    void createOrUpdateRejectsToolLifecycleEventTypes() {
+        var chat = new Chat();
+        chat.setId("chat-id");
+        var dto = new CreateOrUpdateConversationEntryDTO();
+        dto.setIdempotencyKey("tool-event");
+        dto.setType(ConversationTypeDTO.TOOL_REQUEST);
+        dto.setStatus(EntryStatusDTO.COMPLETED);
+
+        when(chatMapper.mapConversationType(ConversationTypeDTO.TOOL_REQUEST))
+                .thenReturn(ConversationEntry.EntryType.TOOL_REQUEST);
+        when(chatMapper.mapConversationStatus(EntryStatusDTO.COMPLETED))
+                .thenReturn(ConversationEntry.EntryStatus.COMPLETED);
+
+        assertThrows(IdempotencyConflictException.class, () -> service.createOrUpdate(chat, dto));
+        verify(dao, never()).create(any(ConversationEntry.class));
+        verify(msgDao, never()).create(any(Message.class));
+    }
+
     private static CreateOrUpdateConversationEntryDTO assistantEntryRequest(String idempotencyKey,
             String agentConfigVersion) {
         var dto = new CreateOrUpdateConversationEntryDTO();
